@@ -1,6 +1,6 @@
 {
   "name": "@wingravity/typerail",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Finds TypeScript code that type-checks and still fails at runtime. One command, no configuration, and coding agents cannot switch it off.",
   "license": "MIT",
   "author": "Daniel Berigoi",
