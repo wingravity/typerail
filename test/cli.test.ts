@@ -306,4 +306,18 @@ describe("typerail binary", () => {
     assert.ok(!run.stdout.includes("index.ts:1:"), run.stdout);
     assert.ok(run.stdout.includes("TR403 index.ts:8:"), run.stdout);
   });
+
+  it("leaves asset imports to the bundler and reports an enum assertion once", async () => {
+    await write("tsconfig.json", `{ "compilerOptions": { "strict": true, "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "types": [] }, "include": ["*.ts"] }`);
+    await write("styles.css", "body { margin: 0; }\n");
+    await write(
+      "index.ts",
+      ['import "./styles.css";', 'import "./missing-polyfill.js";', "enum Status { Open }", "declare const raw: number;", "export const status = raw as Status;", ""].join("\n"),
+    );
+    const run = spawnSync(process.execPath, [main, "check"], { cwd: dir, encoding: "utf8" });
+    assert.ok(!run.stdout.includes("index.ts:1:"), run.stdout);
+    assert.ok(run.stdout.includes("TR606 index.ts:2:"), run.stdout);
+    assert.equal(run.stdout.match(/index\.ts:5:/gu)?.length, 1, run.stdout);
+    assert.ok(run.stdout.includes("TR201 index.ts:5:"), run.stdout);
+  });
 });

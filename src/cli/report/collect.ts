@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, parse, relative, resolve } from "node:path";
 import ts from "typescript";
 import { ESLint, type Linter } from "eslint";
 import tseslint from "typescript-eslint";
@@ -134,8 +134,14 @@ function compilerOptions(parsed: ts.ParsedCommandLine, flags: ts.CompilerOptions
   return { ...parsed.options, ...flags, ...deprecations, noEmit: true, composite: false, incremental: false };
 }
 
+const ASSET_IMPORT = /\.(?:css|scss|sass|less|styl|pcss|svg|png|jpe?g|gif|webp|avif|ico|bmp|woff2?|ttf|otf|eot)(?:\?.*)?'/u;
+const MISSING_SIDE_EFFECT_IMPORT = 2882;
+
 function diagnosticFinding(cwd: string, configPath: string, diagnostic: ts.Diagnostic): Finding | undefined {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, " ");
+  if (diagnostic.code === MISSING_SIDE_EFFECT_IMPORT && ASSET_IMPORT.test(message)) {
+    return undefined;
+  }
   const rule = `TS${String(diagnostic.code)}`;
   const source = diagnostic.file;
   if (source === undefined || diagnostic.start === undefined) {
@@ -225,9 +231,11 @@ async function collectEslint(cwd: string, configs: readonly string[], files: rea
   const created = attempt(
     () =>
       new ESLint({
-        cwd,
+        // The project folder may hold ESLint files that must not affect typerail; the files are passed as absolute paths.
+        cwd: parse(cwd).root,
         overrideConfigFile: true,
         overrideConfig: cliConfig(configs),
+        ignore: false,
         warnIgnored: false,
       }),
     (cause) => `ESLint could not start: ${describeCause(cause)}`,
@@ -247,7 +255,7 @@ async function collectEslint(cwd: string, configs: readonly string[], files: rea
     results.value.flatMap((result) =>
       result.messages.flatMap((message) => {
         const fatal = message.fatal === true;
-        if (message.ruleId === null && !fatal) {
+        if ((message.ruleId === null && !fatal) || message.messageId === "unsafeEnumAssertion") {
           return [];
         }
         return [
@@ -376,6 +384,13 @@ export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, 
     return dependencies;
   }
   const configPath = resolve(cwd, options.tsconfig ?? "tsconfig.json");
+  if (!existsSync(configPath)) {
+    return err(
+      options.tsconfig === undefined
+        ? `No tsconfig.json in ${cwd}. Run typerail in the folder that has the project's tsconfig.json, or pass --project <tsconfig>. In a monorepo, run it in each package.`
+        : `${options.tsconfig} does not exist.`,
+    );
+  }
   const flags = await typerailCompilerOptions();
   if (!flags.ok) {
     return flags;

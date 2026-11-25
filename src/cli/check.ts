@@ -21,7 +21,7 @@ export async function runCheck(args: readonly string[]): Promise<number> {
   const parsed = parseArgs({
     args: [...args],
     options: {
-      project: { type: "string", default: "tsconfig.json" },
+      project: { type: "string" },
       "update-baseline": { type: "boolean", default: false },
       format: { type: "string", default: "text" },
       help: { type: "boolean", short: "h", default: false },

@@ -24,7 +24,7 @@ export async function runReport(args: readonly string[]): Promise<number> {
       format: { type: "string", default: "md" },
       out: { type: "string" },
       next: { type: "string" },
-      project: { type: "string", default: "tsconfig.json" },
+      project: { type: "string" },
       help: { type: "boolean", short: "h", default: false },
     },
     strict: false,
