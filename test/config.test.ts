@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { ESLint, type Linter } from "eslint";
 import ts from "typescript";
-import { strictTs } from "../src/eslint/index.ts";
+import { typerail } from "../src/eslint/index.ts";
 
 const fixtureDir = resolve(import.meta.dirname, "fixtures/project");
 const fixtureFiles = readdirSync(fixtureDir).filter((name) => name.endsWith(".ts"));
@@ -45,7 +45,7 @@ async function lintFindings(): Promise<Map<string, string[]>> {
   const eslint = new ESLint({
     cwd: fixtureDir,
     overrideConfigFile: true,
-    overrideConfig: strictTs({ throwingModules: ["node:child_process", "node:fs"], tsconfigRootDir: fixtureDir }) as unknown as Linter.Config[],
+    overrideConfig: typerail({ tsconfigRootDir: fixtureDir }) as unknown as Linter.Config[],
   });
   const results = await eslint.lintFiles(fixtureFiles);
   return new Map(

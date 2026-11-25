@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 declare const response: { body: any }; // @expect @typescript-eslint/no-explicit-any
 
 describe("suite", () => {
-  it("relaxes type and boundary rules", async () => {
+  it("relaxes assertions and unsafe any", async () => {
     const id: string = response.body.user.id;
     const asserted = JSON.parse("{}") as { ok: boolean };
     const name: string | undefined = asserted.ok ? id : undefined;
@@ -17,4 +17,4 @@ describe("suite", () => {
 
 const later = (): Promise<void> => Promise.resolve();
 later(); // @expect @typescript-eslint/no-floating-promises
-export const loose = (a: string, b: string): boolean => a == b; // @expect eqeqeq
+export const loose = (a: string, b: string): boolean => a == b;

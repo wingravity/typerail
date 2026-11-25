@@ -1,5 +1,5 @@
 name: Bug
-description: The CLI, a library function or the configuration does not behave as documented.
+description: The CLI or the configuration does not behave as documented.
 labels: ["bug"]
 body:
   - type: textarea
@@ -25,6 +25,6 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: strict-ts, Node, TypeScript, ESLint and typescript-eslint versions.
+      description: typerail, Node, TypeScript, ESLint and typescript-eslint versions.
     validations:
       required: true

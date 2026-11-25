@@ -10,25 +10,36 @@ npm test
 npm run build
 ```
 
-strict-ts lints its own source with its own configuration. `src/result.ts`, `src/safe/` and `src/node/` contain the only code allowed to call throwing APIs.
+typerail lints its own source with its own preset, plus rules for this repository only: the source returns Results instead of throwing, and `src/internal/` holds the only code allowed to call throwing APIs.
 
 ## Rules and configuration
 
 Every rule and compiler flag is covered by `test/fixtures/project`, a project of intentionally incorrect code. Each line that must be reported ends with a marker:
 
 ```ts
-export const parsed: unknown = JSON.parse("{}"); // @expect no-restricted-properties
+const animals: Animal[] = dogs; // @expect typerail/no-mutable-array-widening
 ```
 
-The test fails when a marked finding is missing or an unmarked finding appears. A change to the configuration needs matching fixture lines.
+The test fails when a marked finding is missing or an unmarked finding appears. A change to the configuration needs matching fixture lines. `style.ts` holds code that must not be reported, such as `throw`, `while` and `==`.
 
 Every rule the configuration enables needs a priority, a reason and a fix hint in `src/cli/report/classify.ts`. A test fails when one is missing.
 
 Custom rules in `src/eslint/rules/` are tested with `RuleTester` in `test/rules.test.ts`, with valid and invalid cases.
 
+## Gap codes
+
+A new gap needs four things, and `test/gaps.test.ts` fails until all of them exist:
+
+1. An entry in `src/gaps.ts` with the next free code in its category. Codes are never renumbered or reused.
+2. A proof in `test/gaps/<code>.ts` that exports `proof()`. TypeScript must accept it under `typerail/tsconfig.json`, and running it must throw, or return `{ expected, actual }` with different values. For a compiler flag, TypeScript must accept it with the flag off and reject it with the flag on.
+3. A page in `docs/gaps/<code>.md` that shows the proof unchanged, and a row in `docs/gaps/README.md`.
+4. A rule, a flag or the words "Not checked yet" on the page.
+
+When a TypeScript release rejects a proof, the gap is fixed in that release. Set `fixedIn` on the entry and update the page; the code stays.
+
 ## Scope
 
-strict-ts reports code that can fail at runtime. Style, formatting and maintainability rules are out of scope.
+typerail reports code that TypeScript accepts but that can fail at runtime. A new rule needs a fixture that type-checks under `typerail/tsconfig.json` and fails when it runs. Style, formatting, error-handling style and maintainability rules are out of scope.
 
 ## Pull requests
 
@@ -36,4 +47,4 @@ Keep changes focused. Code comments are reserved for logic that cannot be unders
 
 ## Releases
 
-`main` holds source only. Running the **Release** workflow with a version such as `0.2.0` runs the checks, builds, commits `dist/` onto a release commit, tags it `v0.2.0`, and moves the `release` branch (the repository's default) to it. That is why `npx github:wingravity/strict-ts init` runs the latest release, and why installs never need a build step.
+`main` holds source only. Running the **Release** workflow with a version such as `0.2.0` runs the checks, builds, commits `dist/` onto a release commit, tags it `v0.2.0`, and moves the `release` branch (the repository's default) to it. That is why `npx github:wingravity/typerail init` runs the latest release, and why installs never need a build step.

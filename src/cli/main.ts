@@ -1,33 +1,34 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { join } from "node:path";
-import { readTextFile } from "../node/fs.ts";
-import { safeJsonParse } from "../safe/json.ts";
-import { isRecord } from "./jsonc.ts";
+import { readTextFile } from "../internal/fs.ts";
+import { safeJsonParse } from "../internal/json.ts";
+import { asRecord } from "./jsonc.ts";
 import { applyInit, installCommand, planInit, type InitReport } from "./init.ts";
 
-const USAGE = `Usage: strict-ts <command> [options]
+const USAGE = `Usage: typerail <command> [options]
 
 Commands:
-  init        Set up strict-ts in the current project
+  init        Set up typerail in the current project
   report      Write a prioritized report of all findings
 
 Options for init:
   --dry-run   Show what would change without writing anything
   --force     Overwrite an existing ESLint config
 
-Run "strict-ts report --help" for report options.
+Run "typerail report --help" for report options.
   -h, --help  Show this help`;
 
-const FALLBACK_SPEC = "github:wingravity/strict-ts";
+const FALLBACK_SPEC = "github:wingravity/typerail";
 
 async function packageSpec(): Promise<string> {
   const text = await readTextFile(join(import.meta.dirname, "../../package.json"));
   const pkg = text.ok ? safeJsonParse(text.value) : undefined;
-  if (pkg?.ok !== true || !isRecord(pkg.value)) {
+  const record = pkg?.ok === true ? asRecord(pkg.value) : undefined;
+  if (record === undefined) {
     return FALLBACK_SPEC;
   }
-  const { repository, version } = pkg.value;
+  const { repository, version } = record;
   if (typeof repository !== "string" || typeof version !== "string") {
     return FALLBACK_SPEC;
   }
@@ -37,7 +38,7 @@ async function packageSpec(): Promise<string> {
 function printReport(report: InitReport, dryRun: boolean): void {
   const verb = (status: string): string => (dryRun && (status === "created" || status === "updated") ? `would be ${status}` : status);
   const width = Math.max(...report.changes.map((change) => change.file.length));
-  console.log(dryRun ? "strict-ts init (dry run, nothing written)\n" : "strict-ts init\n");
+  console.log(dryRun ? "typerail init (dry run, nothing written)\n" : "typerail init\n");
   for (const change of report.changes) {
     console.log(`  ${verb(change.status).padEnd(16)} ${change.file.padEnd(width)}  ${change.detail}`);
   }
@@ -66,13 +67,13 @@ async function init(args: readonly string[]): Promise<number> {
   const cwd = process.cwd();
   const report = await planInit({ cwd, packageSpec: await packageSpec(), dryRun, force: parsed.values.force === true });
   if (!report.ok) {
-    console.error(`strict-ts init: ${report.error}`);
+    console.error(`typerail init: ${report.error}`);
     return 1;
   }
   if (!dryRun) {
     const applied = await applyInit(cwd, report.value);
     if (!applied.ok) {
-      console.error(`strict-ts init: could not write ${applied.error.path}: ${applied.error.message}`);
+      console.error(`typerail init: could not write ${applied.error.path}: ${applied.error.message}`);
       return 1;
     }
   }

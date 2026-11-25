@@ -1,12 +1,12 @@
 name: Missing check
-description: Code that can fail at runtime and is not reported.
+description: Code that TypeScript accepts and that fails at runtime, but typerail does not report.
 labels: ["missing check"]
 body:
   - type: textarea
     id: code
     attributes:
       label: Code
-      description: The smallest code sample that should be reported.
+      description: The smallest code sample that type-checks with typerail/tsconfig.json and should be reported.
       render: ts
     validations:
       required: true
@@ -21,4 +21,4 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: strict-ts, TypeScript, ESLint and typescript-eslint versions.
+      description: typerail, TypeScript, ESLint and typescript-eslint versions.

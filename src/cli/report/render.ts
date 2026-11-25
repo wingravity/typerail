@@ -1,7 +1,8 @@
-import { safeJsonStringify } from "../../safe/json.ts";
-import { err, ok, type Result } from "../../result.ts";
+import { safeJsonStringify } from "../../internal/json.ts";
+import { err, ok, type Result } from "../../internal/result.ts";
 import { PRIORITY_DESCRIPTIONS, PRIORITY_TITLES, type Priority } from "./classify.ts";
 import type { Finding, Report } from "./collect.ts";
+import { docsUrl } from "../../gaps.ts";
 
 const PRIORITIES: readonly Priority[] = [0, 1, 2, 3, 4];
 const TOP_FILES = 10;
@@ -52,8 +53,10 @@ function ruleSections(findings: readonly Finding[], headingLevel: string): strin
     if (first === undefined) {
       continue;
     }
-    lines.push(`${headingLevel} \`${rule}\` (${String(group.length)})`, "");
-    lines.push(`${first.why} **Fix:** ${first.fix}`, "");
+    const code = first.code === undefined ? "" : `${first.code} `;
+    lines.push(`${headingLevel} ${code}\`${rule}\` (${String(group.length)})`, "");
+    const docs = first.code === undefined ? "" : ` [About ${first.code}](${docsUrl(first.code)}).`;
+    lines.push(`${first.why} **Fix:** ${first.fix}${docs}`, "");
     lines.push("<details>", `<summary>${String(group.length)} locations</summary>`, "");
     for (const f of group) {
       lines.push(`- \`${location(f)}\` ${oneLine(f.message)}`);
@@ -69,7 +72,7 @@ export function renderMarkdown(report: Report, projectName: string): string {
   const summary = summarize(report.findings);
   const date = report.generatedAt.slice(0, 10);
   const lines: string[] = [
-    "# strict-ts report",
+    "# typerail report",
     "",
     `Project \`${projectName}\`, generated on ${date}. ${String(report.findings.length)} findings: ${String(production.length)} in production code, ${String(tests.length)} in tests.`,
     "",
@@ -97,11 +100,11 @@ export function renderMarkdown(report: Report, projectName: string): string {
     lines.push(
       "## Configuration changes",
       "",
-      "The project configuration weakens strict-ts in these places. Code they would report is not in this report.",
+      "The project configuration weakens typerail in these places. Code they would report is not in this report.",
       "",
-      "| Setting | strict-ts | Project |",
-      "|---|---|---|",
-      ...report.configChanges.map((c) => `| \`${c.setting}\` | ${c.expected} | ${c.actual} |`),
+      "| Code | Setting | typerail | Project |",
+      "|---|---|---|---|",
+      ...report.configChanges.map((c) => `| ${c.code ?? ""} | \`${c.setting}\` | ${c.expected} | ${c.actual} |`),
       "",
     );
   }
@@ -165,20 +168,21 @@ export function renderNext(report: Report, limit: number): string {
   ).join(", ");
   const shown = report.findings.slice(0, limit);
   const lines = [
-    `strict-ts: ${String(report.findings.length)} findings (${counts}). Showing the first ${String(shown.length)}, highest priority first.`,
+    `typerail: ${String(report.findings.length)} findings (${counts}). Showing the first ${String(shown.length)}, highest priority first.`,
     "",
   ];
   if (report.configChanges.length > 0) {
     lines.push(
-      `Configuration weakens strict-ts: ${report.configChanges.map((c) => `${c.setting} is ${c.actual}`).join("; ")}.`,
+      `Configuration weakens typerail: ${report.configChanges.map((c) => `${c.setting} is ${c.actual}${c.code === undefined ? "" : ` (${c.code})`}`).join("; ")}.`,
       "",
     );
   }
   shown.forEach((f, index) => {
     lines.push(
-      `${String(index + 1)}. [P${String(f.priority)}] ${location(f)} ${f.rule}${f.test ? " (test)" : ""}`,
+      `${String(index + 1)}. [P${String(f.priority)}]${f.code === undefined ? "" : ` ${f.code}`} ${location(f)} ${f.rule}${f.test ? " (test)" : ""}`,
       `   ${oneLine(f.message)}`,
       `   Fix: ${f.fix}`,
+      ...(f.code === undefined ? [] : [`   Docs: ${docsUrl(f.code)}`]),
     );
   });
   return `${lines.join("\n")}\n`;

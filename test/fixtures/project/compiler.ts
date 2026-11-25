@@ -6,23 +6,9 @@ interface Options {
 }
 export const options: Options = { name: undefined }; // @expect TS2375
 
-const dict: Record<string, string> = {};
-export const value = dict.key; // @expect TS4111
-
-export function implicitReturn(flag: boolean): number | undefined { // @expect TS7030
+export function implicitReturn(flag: boolean): number | undefined {
   if (flag) {
     return 1;
-  }
-}
-
-class Base {
-  greet(): string {
-    return "base";
-  }
-}
-export class Child extends Base {
-  greet(): string { // @expect TS4114
-    return "child";
   }
 }
 
@@ -31,17 +17,19 @@ export function fallthrough(n: 1 | 2): number {
   switch (n) {
     case 1: // @expect TS7029
       total += 1;
-    case 2: // @expect no-fallthrough
+    case 2:
       total += 2;
   }
   return total;
 }
 
-export function unusedParameter(used: number, unused: number): number { // @expect TS6133
-  return used;
+export function caught(run: () => void): string {
+  try {
+    run();
+    return "";
+  } catch (e) {
+    return e.message; // @expect TS18046 @typescript-eslint/no-unsafe-return
+  }
 }
 
-export function unreachable(): number {
-  return 1;
-  console.log("never"); // @expect TS7027
-}
+import "./missing-polyfill.ts"; // @expect TS2882

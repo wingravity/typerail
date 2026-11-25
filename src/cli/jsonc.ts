@@ -1,9 +1,16 @@
 import ts from "typescript";
-import { err, ok, type Result } from "../result.ts";
-import { safeJsonStringify } from "../safe/json.ts";
+import { err, ok, type Result } from "../internal/result.ts";
+import { safeJsonStringify } from "../internal/json.ts";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const record: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    record[key] = entry;
+  }
+  return record;
 }
 
 export function asArray(value: unknown): readonly unknown[] {
@@ -16,7 +23,8 @@ export function parseJsonc(fileName: string, text: string): Result<Record<string
     return err(`${fileName}: ${ts.flattenDiagnosticMessageText(parsed.error.messageText, "\n")}`);
   }
   const config: unknown = parsed.config;
-  return isRecord(config) ? ok(config) : err(`${fileName}: expected a JSON object`);
+  const record = asRecord(config);
+  return record === undefined ? err(`${fileName}: expected a JSON object`) : ok(record);
 }
 
 export function detectIndent(text: string): string {

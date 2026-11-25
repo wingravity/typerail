@@ -1,37 +1,35 @@
-import { err, ok, type Result } from "strict-ts";
-import { parseWith, safeJsonParse, type StandardSchemaV1 } from "strict-ts/safe";
-
 interface User {
   readonly id: number;
   readonly name: string;
 }
 
-type LoadError = { readonly kind: "NotFound" } | { readonly kind: "Invalid"; readonly message: string };
+type Shape = { readonly kind: "circle"; readonly radius: number } | { readonly kind: "square"; readonly side: number };
 
-declare const userSchema: StandardSchemaV1<unknown, User>;
-
-export function loadUser(text: string): Result<User, LoadError> {
-  const json = safeJsonParse(text);
-  if (!json.ok) {
-    return err({ kind: "Invalid", message: json.error.message });
+export function parseUser(text: string): User {
+  const value: unknown = JSON.parse(text);
+  if (typeof value === "object" && value !== null && "id" in value && "name" in value) {
+    const { id, name } = value;
+    if (typeof id === "number" && typeof name === "string") {
+      return { id, name };
+    }
   }
-  const user = parseWith(userSchema, json.value);
-  if (!user.ok) {
-    return err({ kind: "Invalid", message: user.error.message });
-  }
-  return ok(user.value);
+  throw new Error("not a user");
 }
 
-export function describe(error: LoadError): string {
-  switch (error.kind) {
-    case "NotFound":
-      return "not found";
-    case "Invalid":
-      return `invalid: ${error.message}`;
+export function area(shape: Shape): number {
+  switch (shape.kind) {
+    case "circle":
+      return Math.PI * shape.radius ** 2;
+    case "square":
+      return shape.side ** 2;
   }
 }
 
 export function firstName(users: readonly User[]): string {
   const first = users[0];
   return first === undefined ? "nobody" : first.name;
+}
+
+export async function loadAll(load: (id: number) => Promise<User>, ids: readonly number[]): Promise<User[]> {
+  return Promise.all(ids.map((id) => load(id)));
 }

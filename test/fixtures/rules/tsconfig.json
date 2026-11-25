@@ -2,17 +2,19 @@
   "extends": "../../../config/tsconfig.json",
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "paths": {
-      "strict-ts": ["../../../src/index.ts"],
-      "strict-ts/safe": ["../../../src/safe/index.ts"]
-    }
+    "noEmit": true
   },
-  "include": ["file.ts"]
+  "include": [
+    "file.ts"
+  ]
 }

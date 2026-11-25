@@ -8,11 +8,11 @@ import { AGENTS_END, AGENTS_START, applyInit, CHECK_SCRIPT, planInit, type InitR
 import { parseJsonc } from "../src/cli/jsonc.ts";
 import { supportsSuppressionsApi } from "../src/cli/eslint-version.ts";
 
-const SPEC = "github:wingravity/strict-ts#v1.2.3";
+const SPEC = "github:wingravity/typerail#v1.2.3";
 let dir = "";
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "strict-ts-init-"));
+  dir = await mkdtemp(join(tmpdir(), "typerail-init-"));
 });
 
 afterEach(async () => {
@@ -51,7 +51,7 @@ const TSCONFIG_WITH_COMMENTS = `{
 }
 `;
 
-describe("strict-ts init", () => {
+describe("typerail init", () => {
   it("sets up a fresh project and keeps tsconfig comments", async () => {
     await write("package.json", `{\n  "name": "app",\n  "type": "module"\n}\n`);
     await write("tsconfig.json", TSCONFIG_WITH_COMMENTS);
@@ -73,15 +73,15 @@ describe("strict-ts init", () => {
     assert.ok(tsconfig.includes("/* build output */"));
     const parsed = parseJsonc("tsconfig.json", tsconfig);
     assert.ok(parsed.ok);
-    assert.deepEqual(parsed.value["extends"], ["@tsconfig/node22/tsconfig.json", "strict-ts/tsconfig.json"]);
+    assert.deepEqual(parsed.value["extends"], ["@tsconfig/node22/tsconfig.json", "typerail/tsconfig.json"]);
 
     const pkg = parseJsonc("package.json", await read("package.json"));
     assert.ok(pkg.ok);
     assert.deepEqual(pkg.value["scripts"], { check: CHECK_SCRIPT });
-    assert.deepEqual(pkg.value["dependencies"], { "strict-ts": SPEC });
-    assert.equal(pkg.value["devDependencies"], undefined);
+    assert.deepEqual(pkg.value["devDependencies"], { typerail: SPEC });
+    assert.equal(pkg.value["dependencies"], undefined);
 
-    assert.ok((await read("eslint.config.js")).includes('from "strict-ts/eslint"'));
+    assert.ok((await read("eslint.config.js")).includes('from "typerail/eslint"'));
     const settings = parseJsonc("settings.json", await read(".vscode/settings.json"));
     assert.ok(settings.ok);
     assert.deepEqual(settings.value, {
@@ -131,7 +131,7 @@ describe("strict-ts init", () => {
     await init();
     const parsed = parseJsonc("tsconfig.json", await read("tsconfig.json"));
     assert.ok(parsed.ok);
-    assert.deepEqual(parsed.value["extends"], ["./base.json", "strict-ts/tsconfig.json"]);
+    assert.deepEqual(parsed.value["extends"], ["./base.json", "typerail/tsconfig.json"]);
     assert.deepEqual(parsed.value["include"], ["src"]);
   });
 
@@ -141,7 +141,7 @@ describe("strict-ts init", () => {
     await init();
     const parsed = parseJsonc("tsconfig.json", await read("tsconfig.json"));
     assert.ok(parsed.ok);
-    assert.equal(parsed.value["extends"], "strict-ts/tsconfig.json");
+    assert.equal(parsed.value["extends"], "typerail/tsconfig.json");
   });
 
   it("leaves an existing ESLint config alone unless --force", async () => {
@@ -152,11 +152,11 @@ describe("strict-ts init", () => {
     const kept = await init();
     assert.equal(statuses(kept)["eslint.config.js"], "skipped");
     assert.equal(await read("eslint.config.js"), "export default [];\n");
-    assert.ok(kept.notes.some((note) => note.includes("strict-ts/eslint")));
+    assert.ok(kept.notes.some((note) => note.includes("typerail/eslint")));
 
     const forced = await init({ force: true });
     assert.equal(statuses(forced)["eslint.config.js"], "updated");
-    assert.ok((await read("eslint.config.js")).includes("strict-ts/eslint"));
+    assert.ok((await read("eslint.config.js")).includes("typerail/eslint"));
   });
 
   it("merges into existing VS Code settings and keeps their comments", async () => {
@@ -192,14 +192,14 @@ describe("strict-ts init", () => {
     assert.deepEqual(report.missingPeers, ["typescript", "typescript-eslint"]);
   });
 
-  it("leaves strict-ts in devDependencies and asks to move it", async () => {
-    await write("package.json", `{ "name": "app", "devDependencies": { "strict-ts": "${SPEC}" } }`);
+  it("leaves typerail in dependencies and asks to move it", async () => {
+    await write("package.json", `{ "name": "app", "dependencies": { "typerail": "${SPEC}" } }`);
     await write("tsconfig.json", `{}`);
     const report = await init();
     const pkg = parseJsonc("package.json", await read("package.json"));
     assert.ok(pkg.ok);
-    assert.equal(pkg.value["dependencies"], undefined);
-    assert.ok(report.notes.some((note) => note.includes("Move it to dependencies")));
+    assert.equal(pkg.value["devDependencies"], undefined);
+    assert.ok(report.notes.some((note) => note.includes("Move it to devDependencies")));
   });
 
   it("skips a missing tsconfig and detects pnpm", async () => {
@@ -210,7 +210,7 @@ describe("strict-ts init", () => {
     assert.equal(report.packageManager, "pnpm");
   });
 
-  it("adds strict-ts instructions to an existing AGENTS.md once", async () => {
+  it("adds typerail instructions to an existing AGENTS.md once", async () => {
     await write("package.json", `{ "name": "app" }`);
     await write("tsconfig.json", `{}`);
     await write("AGENTS.md", "# Team rules\n\nUse tabs.\n");
@@ -218,7 +218,7 @@ describe("strict-ts init", () => {
     const first = await init();
     assert.equal(statuses(first)["AGENTS.md"], "updated");
     const agents = await read("AGENTS.md");
-    assert.ok(agents.startsWith("# Team rules\n\nUse tabs.\n\n<!-- strict-ts:start -->"));
+    assert.ok(agents.startsWith("# Team rules\n\nUse tabs.\n\n<!-- typerail:start -->"));
     assert.ok(agents.includes("npm run check"));
 
     const second = await init();
@@ -226,7 +226,7 @@ describe("strict-ts init", () => {
     assert.equal(await read("AGENTS.md"), agents);
   });
 
-  it("replaces an outdated strict-ts section and keeps the rest", async () => {
+  it("replaces an outdated typerail section and keeps the rest", async () => {
     await write("package.json", `{ "name": "app" }`);
     await write("tsconfig.json", `{}`);
     await write("pnpm-lock.yaml", "");
@@ -235,7 +235,7 @@ describe("strict-ts init", () => {
     const report = await init();
     assert.equal(statuses(report)["AGENTS.md"], "updated");
     const agents = await read("AGENTS.md");
-    assert.ok(agents.startsWith("Before\n\n<!-- strict-ts:start -->"));
+    assert.ok(agents.startsWith("Before\n\n<!-- typerail:start -->"));
     assert.ok(agents.endsWith(`${AGENTS_END}\n\nAfter\n`));
     assert.ok(!agents.includes("old rules"));
     assert.ok(agents.includes("pnpm run check"));
@@ -296,13 +296,13 @@ describe("supportsSuppressionsApi", () => {
   });
 });
 
-describe("strict-ts binary", () => {
+describe("typerail binary", () => {
   const main = resolve(import.meta.dirname, "../src/cli/main.ts");
 
   it("prints usage and rejects unknown commands", () => {
     const help = spawnSync(process.execPath, [main, "--help"], { encoding: "utf8" });
     assert.equal(help.status, 0);
-    assert.ok(help.stdout.includes("Usage: strict-ts"));
+    assert.ok(help.stdout.includes("Usage: typerail"));
     const unknown = spawnSync(process.execPath, [main, "nope"], { encoding: "utf8" });
     assert.equal(unknown.status, 1);
   });

@@ -1,11 +1,12 @@
 import { dirname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { ESLint } from "eslint";
-import { attempt, attemptAsync, err, ok, type AsyncResult, type Result } from "../../result.ts";
-import { describeCause } from "../../error.ts";
-import { readTextFile } from "../../node/fs.ts";
-import { strictTs } from "../../eslint/index.ts";
-import { asArray, isRecord, parseJsonc } from "../jsonc.ts";
+import { attempt, attemptAsync, err, ok, type AsyncResult, type Result } from "../../internal/result.ts";
+import { describeCause } from "../../internal/error.ts";
+import { gapForFlag, gapForRule } from "../../gaps.ts";
+import { readTextFile } from "../../internal/fs.ts";
+import { typerail } from "../../eslint/index.ts";
+import { asArray, asRecord, parseJsonc } from "../jsonc.ts";
 import { SUPPRESSIONS_API_VERSION, supportsSuppressionsApi } from "../eslint-version.ts";
 import {
   classifyEslint,
@@ -27,9 +28,11 @@ export interface Finding {
   readonly priority: Priority;
   readonly why: string;
   readonly fix: string;
+  readonly code?: string;
 }
 
 export interface ConfigChange {
+  readonly code?: string;
   readonly setting: string;
   readonly expected: string;
   readonly actual: string;
@@ -50,7 +53,6 @@ export interface ReportOptions {
 }
 
 const TEST_FILE = /(?:\.(?:test|spec)\.[cm]?tsx?$)|(?:(?:^|\/)__tests__\/)/u;
-const BOUNDARY_FILE = /(?:\.boundary\.tsx?$)|(?:(?:^|\/)boundary\/)/u;
 const TYPESCRIPT_SOURCE = /(?<!\.d)\.[cm]?tsx?$/u;
 
 export function isTestFile(file: string): boolean {
@@ -84,8 +86,8 @@ const SEVERITY_NAMES = ["off", "warn", "error"];
 
 export function expectedRuleSeverities(): Map<string, number> {
   const expected = new Map<string, number>();
-  for (const config of strictTs()) {
-    if (config.name === "strict-ts/boundary" || config.name === "strict-ts/tests") {
+  for (const config of typerail()) {
+    if (config.name === "typerail/tests") {
       continue;
     }
     for (const [rule, entry] of Object.entries(config.rules ?? {})) {
@@ -106,7 +108,7 @@ async function expectedCompilerFlags(): AsyncResult<Record<string, unknown>, str
     return parsed;
   }
   const options = parsed.value["compilerOptions"];
-  return ok(isRecord(options) ? options : {});
+  return ok(asRecord(options) ?? {});
 }
 
 interface TypeScriptResult {
@@ -147,14 +149,14 @@ function collectTypeScript(cwd: string, tsconfig: string): Result<TypeScriptResu
   return ok({ findings, options: parsed.options });
 }
 
-function classifyMessage(message: { ruleId: string | null; message: string; fatal?: boolean | undefined }): Classification {
+function classifyMessage(message: { readonly ruleId: string | null; readonly fatal?: boolean | undefined }): Classification {
   if (message.ruleId === null) {
     return message.fatal === true ? UNPARSED_FILE : INERT_INLINE_DISABLE;
   }
-  return classifyEslint(message.ruleId, message.message);
+  return classifyEslint(message.ruleId);
 }
 
-function eslintRuleName(message: { ruleId: string | null; fatal?: boolean | undefined }): string {
+function eslintRuleName(message: { readonly ruleId: string | null; readonly fatal?: boolean | undefined }): string {
   if (message.ruleId !== null) {
     return message.ruleId;
   }
@@ -166,16 +168,17 @@ async function eslintRuleChanges(eslint: ESLint, file: string): Promise<ConfigCh
     async (): Promise<unknown> => eslint.calculateConfigForFile(file),
     (cause) => describeCause(cause),
   );
-  if (!config.ok || !isRecord(config.value)) {
+  const resolved = config.ok ? asRecord(config.value) : undefined;
+  if (resolved === undefined) {
     return [];
   }
-  const rules = config.value["rules"];
-  const actual = isRecord(rules) ? rules : {};
+  const actual = asRecord(resolved["rules"]) ?? {};
   const changes: ConfigChange[] = [];
   for (const [rule, expected] of expectedRuleSeverities()) {
     const severity = severityOf(actual[rule]);
     if (expected === 2 && severity < 2) {
-      changes.push({ setting: rule, expected: "error", actual: SEVERITY_NAMES[severity] ?? "off" });
+      const code = gapForRule(rule)?.code;
+      changes.push({ ...(code === undefined ? {} : { code }), setting: rule, expected: "error", actual: SEVERITY_NAMES[severity] ?? "off" });
     }
   }
   return changes;
@@ -190,7 +193,9 @@ async function compilerFlagChanges(options: ts.CompilerOptions): Promise<ConfigC
   for (const [flag, value] of Object.entries(expected.value)) {
     const actual: unknown = options[flag];
     if (typeof value === "boolean" && actual !== value) {
+      const code = gapForFlag(flag)?.code;
       changes.push({
+        ...(code === undefined ? {} : { code }),
         setting: `tsconfig: ${flag}`,
         expected: String(value),
         actual: typeof actual === "boolean" ? String(actual) : "not set",
@@ -262,7 +267,7 @@ export async function buildReport(options: ReportOptions): AsyncResult<Report, s
 
   const sample = results.value.find((result) => {
     const file = relative(cwd, result.filePath);
-    return TYPESCRIPT_SOURCE.test(file) && !isTestFile(file) && !BOUNDARY_FILE.test(file);
+    return TYPESCRIPT_SOURCE.test(file) && !isTestFile(file);
   });
   const ruleChanges = sample === undefined ? [] : await eslintRuleChanges(eslint, sample.filePath);
   const flagChanges = await compilerFlagChanges(typescript.value.options);

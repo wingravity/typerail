@@ -1,11 +1,11 @@
 import { join } from "node:path";
-import { err, ok, type AsyncResult, type Result } from "../result.ts";
-import { safeJsonParse, safeJsonStringify } from "../safe/json.ts";
-import { ensureDir, readTextFile, writeTextFile, type FsError } from "../node/fs.ts";
-import { asArray, isRecord, parseJsonc, setTopLevelProperty } from "./jsonc.ts";
+import { err, ok, type AsyncResult, type Result } from "../internal/result.ts";
+import { safeJsonParse, safeJsonStringify } from "../internal/json.ts";
+import { ensureDir, readTextFile, writeTextFile, type FsError } from "../internal/fs.ts";
+import { asArray, asRecord, parseJsonc, setTopLevelProperty } from "./jsonc.ts";
 import { SUPPRESSIONS_API_VERSION, supportsSuppressionsApi } from "./eslint-version.ts";
 
-export const TSCONFIG_ENTRY = "strict-ts/tsconfig.json";
+export const TSCONFIG_ENTRY = "typerail/tsconfig.json";
 export const ESLINT_EXTENSION = "dbaeumer.vscode-eslint";
 export const CHECK_SCRIPT = "tsc --noEmit && eslint .";
 const PEERS = ["typescript", "eslint", "typescript-eslint"];
@@ -53,34 +53,32 @@ async function readOptional(path: string): AsyncResult<string | undefined, strin
 }
 
 function eslintTemplate(): string {
-  return `import strictTs from "strict-ts/eslint";
+  return `import typerail from "typerail/eslint";
 
 export default [
   { ignores: ["dist/**", "build/**", "coverage/**"] },
-  ...strictTs({
-    tsconfigRootDir: import.meta.dirname,
-    throwingModules: [],
-  }),
+  ...typerail({ tsconfigRootDir: import.meta.dirname }),
 ];
 `;
 }
 
-export const AGENTS_START = "<!-- strict-ts:start -->";
-export const AGENTS_END = "<!-- strict-ts:end -->";
+export const AGENTS_START = "<!-- typerail:start -->";
+export const AGENTS_END = "<!-- typerail:end -->";
 
 export function agentsSection(packageManager: string): string {
   return `${AGENTS_START}
-## strict-ts
+## typerail
 
-This project uses [strict-ts](https://github.com/wingravity/strict-ts). A change is complete only when \`${packageManager} run check\` passes.
+This project uses [typerail](https://github.com/wingravity/typerail), which reports code that TypeScript accepts but that can fail at runtime. A change is complete only when \`${packageManager} run check\` passes.
 
-- Functions that can fail return a \`Result\` from \`strict-ts\` (\`ok(value)\`, \`err(error)\`). Callers check \`.ok\`. Do not throw.
-- Do not use \`as\` (except \`as const\`), non-null \`!\`, \`any\` or \`@ts-\` comments. Validate external data with \`parseWith(schema, value)\` from \`strict-ts/safe\`.
-- Use the \`strict-ts/safe\` replacements for \`JSON.parse\`, \`JSON.stringify\`, \`new URL\`, \`fetch\`, \`response.json()\`, \`decodeURIComponent\` and the other built-ins that throw.
-- Code that must call throwing APIs or SDKs goes in \`*.boundary.ts\` files, wrapped with \`attempt()\` or \`attemptAsync()\`, and exposes functions that return Results.
+- Do not use \`as\` (except \`as const\`), non-null \`!\`, \`any\` or \`@ts-\` comments. Narrow values with checks (\`typeof\`, \`in\`, \`Array.isArray\`) or validate them with a schema.
+- Do not write claims the compiler trusts without checking: type predicates (\`value is T\`), assertion functions, definite assignment (\`field!: T\`), overload signatures, or type arguments that only set the return type (\`get<User>(url)\`). Narrow, then build the typed value from the narrowed parts.
+- Values from \`JSON.parse\`, \`response.json()\` and untyped libraries are \`any\`. Validate or narrow them before use.
+- Await or return every promise, or handle its rejection with \`.catch\`.
+- Type parameters that only read an array or object as readonly (\`readonly T[]\`, \`Readonly<T>\`, \`ReadonlySet<T>\`).
 - \`// eslint-disable\` comments have no effect. Do not add them, and do not weaken \`eslint.config.js\` or \`tsconfig.json\` to make the check pass.
-- Run \`npx strict-ts report --next 20\` for the highest-priority findings, each with a fix instruction.
-- API reference: \`node_modules/strict-ts/docs/api.md\`.
+- Run \`npx typerail report --next 20\` for the highest-priority findings, each with a fix instruction.
+- Every finding has a code such as TR101. Its explanation and fix are in \`node_modules/typerail/docs/gaps/\`.
 ${AGENTS_END}`;
 }
 
@@ -91,7 +89,7 @@ function planAgents(text: string | undefined, packageManager: string): Change {
     return {
       file,
       status: "created",
-      detail: "strict-ts instructions for coding agents",
+      detail: "typerail instructions for coding agents",
       content: `# Instructions for coding agents\n\n${section}\n`,
     };
   }
@@ -101,14 +99,14 @@ function planAgents(text: string | undefined, packageManager: string): Change {
     return {
       file,
       status: "updated",
-      detail: "added strict-ts instructions",
+      detail: "added typerail instructions",
       content: `${text.trimEnd()}\n\n${section}\n`,
     };
   }
   const updated = text.slice(0, start) + section + text.slice(end + AGENTS_END.length);
   return updated === text
-    ? { file, status: "unchanged", detail: "strict-ts instructions are current" }
-    : { file, status: "updated", detail: "refreshed strict-ts instructions", content: updated };
+    ? { file, status: "unchanged", detail: "typerail instructions are current" }
+    : { file, status: "updated", detail: "refreshed typerail instructions", content: updated };
 }
 
 function planClaude(text: string | undefined): Change | undefined {
@@ -156,21 +154,21 @@ interface ExistingFile {
 
 function planEslint(existing: ExistingFile | undefined, moduleType: boolean, force: boolean): Change {
   const file = existing?.name ?? (moduleType ? "eslint.config.js" : "eslint.config.mjs");
-  if (existing?.text.includes("strict-ts/eslint") === true) {
-    return { file, status: "unchanged", detail: "already uses strict-ts/eslint" };
+  if (existing?.text.includes("typerail/eslint") === true) {
+    return { file, status: "unchanged", detail: "already uses typerail/eslint" };
   }
   if (existing !== undefined && !force) {
     return {
       file,
       status: "skipped",
-      detail: "already exists; merge the strict-ts config by hand (shown below) or rerun with --force",
+      detail: "already exists; merge the typerail config by hand (shown below) or rerun with --force",
     };
   }
-  return { file, status: existing === undefined ? "created" : "updated", detail: "strict-ts config", content: eslintTemplate() };
+  return { file, status: existing === undefined ? "created" : "updated", detail: "typerail config", content: eslintTemplate() };
 }
 
 function readStringMap(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
+  return asRecord(value) ?? {};
 }
 
 function planPackageJson(
@@ -194,29 +192,27 @@ function planPackageJson(
     content = updated.value;
     details.push(`"check" script`);
   } else if (scripts["check"] !== CHECK_SCRIPT) {
-    notes.push(`Kept your existing "check" script. strict-ts expects: ${CHECK_SCRIPT}`);
+    notes.push(`Kept your existing "check" script. typerail expects: ${CHECK_SCRIPT}`);
   }
 
-  if (devDependencies["strict-ts"] === undefined && dependencies["strict-ts"] === undefined) {
-    const updated = setTopLevelProperty(file, content, "dependencies", {
-      ...dependencies,
-      "strict-ts": packageSpec,
+  if (devDependencies["typerail"] === undefined && dependencies["typerail"] === undefined) {
+    const updated = setTopLevelProperty(file, content, "devDependencies", {
+      ...devDependencies,
+      typerail: packageSpec,
     });
     if (!updated.ok) {
       return updated;
     }
     content = updated.value;
-    details.push(`strict-ts dependency (${packageSpec})`);
-  } else if (dependencies["strict-ts"] === undefined) {
-    notes.push(
-      "strict-ts is in devDependencies. Move it to dependencies: code that imports strict-ts needs it at runtime, and installs that omit dev dependencies leave it out.",
-    );
+    details.push(`typerail dev dependency (${packageSpec})`);
+  } else if (devDependencies["typerail"] === undefined) {
+    notes.push("typerail is in dependencies. Move it to devDependencies: it has no runtime code.");
   }
 
   const missingPeers = PEERS.filter((name) => devDependencies[name] === undefined && dependencies[name] === undefined);
   const change: Change =
     details.length === 0
-      ? { file, status: "unchanged", detail: "check script and strict-ts already present" }
+      ? { file, status: "unchanged", detail: "check script and typerail already present" }
       : { file, status: "updated", detail: details.join(", "), content };
   return ok({ change, missingPeers, notes });
 }
@@ -279,8 +275,9 @@ async function projectEslintVersion(cwd: string, pkg: Record<string, unknown>): 
   const installed = await readOptional(join(cwd, "node_modules/eslint/package.json"));
   if (installed.ok && installed.value !== undefined) {
     const parsed = safeJsonParse(installed.value);
-    if (parsed.ok && isRecord(parsed.value) && typeof parsed.value["version"] === "string") {
-      return parsed.value["version"];
+    const version = parsed.ok ? asRecord(parsed.value)?.["version"] : undefined;
+    if (typeof version === "string") {
+      return version;
     }
   }
   const declared = readStringMap(pkg["devDependencies"])["eslint"] ?? readStringMap(pkg["dependencies"])["eslint"];
@@ -320,10 +317,11 @@ export async function planInit(options: InitOptions): AsyncResult<InitReport, st
     return packageText;
   }
   if (packageText.value === undefined) {
-    return err(`No package.json in ${cwd}. Run strict-ts init from the project root.`);
+    return err(`No package.json in ${cwd}. Run typerail init from the project root.`);
   }
-  const pkg = safeJsonParse(packageText.value);
-  if (!pkg.ok || !isRecord(pkg.value)) {
+  const parsedPackage = safeJsonParse(packageText.value);
+  const pkg = parsedPackage.ok ? asRecord(parsedPackage.value) : undefined;
+  if (pkg === undefined) {
     return err("package.json is not a valid JSON object");
   }
 
@@ -341,9 +339,9 @@ export async function planInit(options: InitOptions): AsyncResult<InitReport, st
   }
 
   const tsconfig = planTsconfig(tsconfigText.value);
-  const packageJson = planPackageJson(packageText.value, pkg.value, options.packageSpec);
+  const packageJson = planPackageJson(packageText.value, pkg, options.packageSpec);
   const extensions = planVscodeExtensions(extensionsText.value);
-  const eslintVersion = await projectEslintVersion(cwd, pkg.value);
+  const eslintVersion = await projectEslintVersion(cwd, pkg);
   const suppressionsSupported = eslintVersion === undefined || supportsSuppressionsApi(eslintVersion);
   const settings = planVscodeSettings(settingsText.value, suppressionsSupported);
   if (!tsconfig.ok) {
@@ -359,7 +357,7 @@ export async function planInit(options: InitOptions): AsyncResult<InitReport, st
     return settings;
   }
 
-  const eslint = planEslint(await findEslintConfig(cwd), pkg.value["type"] === "module", options.force === true);
+  const eslint = planEslint(await findEslintConfig(cwd), pkg["type"] === "module", options.force === true);
   const packageManager = await detectPackageManager(cwd);
   const agentsText = await readOptional(join(cwd, "AGENTS.md"));
   const claudeText = await readOptional(join(cwd, "CLAUDE.md"));
