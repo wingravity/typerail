@@ -17,7 +17,7 @@
     "node": ">=20.3"
   },
   "bin": {
-    "typerail": "./dist/cli/main.js"
+    "typerail": "dist/cli/main.js"
   },
   "exports": {
     "./eslint": {

@@ -51,5 +51,6 @@ typerail is published to npm as `@wingravity/typerail` by the **Release** workfl
 
 1. Set the version in `package.json` and run `npm install --package-lock-only`.
 2. Commit, then tag the commit `v<version>` and push the tag: `git tag v0.2.0 && git push origin main v0.2.0`.
+3. When the workflow finishes, approve the release on npmjs.com under **Staged Packages**, with two-factor authentication. Until then, nothing is published.
 
-The workflow checks that the tag matches `package.json`, then runs `npm publish`. `prepublishOnly` runs the type check, lint, tests and build first, so a failing check stops the release and `dist/` is always built from the tagged source. npm adds a provenance statement that links the published version to the workflow run and the commit.
+The workflow checks that the tag matches `package.json`, then runs `npm stage publish`. `prepublishOnly` runs the type check, lint, tests and build first, so a failing check stops the release and `dist/` is always built from the tagged source. The trusted publisher on npm is allowed to stage only, so a release always needs a maintainer's approval.
