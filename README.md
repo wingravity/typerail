@@ -39,7 +39,7 @@ Each example is a test. The test suite compiles every example with TypeScript an
 ## Quick start
 
 ```sh
-npx github:wingravity/typerail init
+npx @wingravity/typerail init
 npm install
 npx typerail report --next 20
 ```
@@ -95,9 +95,9 @@ Requires Node 20.3 or later, TypeScript 5.8 to 6.0, ESLint 9.35 or later (or ESL
 
 | File | Change |
 |---|---|
-| `tsconfig.json` | adds `typerail/tsconfig.json` to `extends` (comments and formatting are kept) |
+| `tsconfig.json` | adds `@wingravity/typerail/tsconfig.json` to `extends` (comments and formatting are kept) |
 | `eslint.config.js` | creates it, or prints the lines to add if one exists |
-| `package.json` | adds a `check` script and `typerail` as a dev dependency pinned to the release tag |
+| `package.json` | adds a `check` script and `@wingravity/typerail` as a dev dependency |
 | `AGENTS.md` | adds a typerail section with instructions for coding agents, or creates the file |
 | `CLAUDE.md` | if it exists, adds `@AGENTS.md` so Claude Code also reads those instructions; never created |
 | `.vscode/extensions.json` | recommends the ESLint extension |
@@ -107,7 +107,7 @@ It also prints the install command for any missing peer dependency (`typescript`
 
 - `--dry-run` previews the changes without writing.
 - `--force` overwrites an existing ESLint config.
-- `npx "github:wingravity/typerail#v0.2.0" init` runs a specific release.
+- `npx @wingravity/typerail@0.1.0 init` runs a specific release.
 
 </details>
 
@@ -127,20 +127,20 @@ It also prints the install command for any missing peer dependency (`typescript`
 <summary><b>Manual setup</b></summary>
 
 ```sh
-npm install -D "github:wingravity/typerail#v0.2.0" typescript eslint typescript-eslint
+npm install -D @wingravity/typerail typescript eslint typescript-eslint
 ```
 
 ```jsonc
 // tsconfig.json
 {
-  "extends": ["<your framework or base config>", "typerail/tsconfig.json"],
+  "extends": ["<your framework or base config>", "@wingravity/typerail/tsconfig.json"],
   "compilerOptions": { /* module, target, jsx... as before */ }
 }
 ```
 
 ```js
 // eslint.config.js
-import typerail from "typerail/eslint";
+import typerail from "@wingravity/typerail/eslint";
 
 export default [
   { ignores: ["dist/**"] },

@@ -1,11 +1,18 @@
 {
-  "name": "typerail",
-  "version": "0.0.0",
+  "name": "@wingravity/typerail",
+  "version": "0.1.0",
   "description": "Reports TypeScript code that type-checks and still fails at runtime, with checks that coding agents cannot switch off.",
   "license": "MIT",
   "author": "Daniel Berigoi",
   "type": "module",
-  "repository": "github:wingravity/typerail",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingravity/typerail.git"
+  },
+  "homepage": "https://github.com/wingravity/typerail#readme",
+  "bugs": {
+    "url": "https://github.com/wingravity/typerail/issues"
+  },
   "engines": {
     "node": ">=20.3"
   },
@@ -32,7 +39,8 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
@@ -64,5 +72,8 @@
     "claude-code",
     "codex",
     "cursor"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

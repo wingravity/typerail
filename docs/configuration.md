@@ -4,7 +4,7 @@ typerail is two presets: a tsconfig with the compiler flags that close gaps, and
 
 ## Compiler flags
 
-`typerail/tsconfig.json` sets only these flags. It does not set `module`, `target`, `jsx`, `lib` or `types`.
+`@wingravity/typerail/tsconfig.json` sets only these flags. It does not set `module`, `target`, `jsx`, `lib` or `types`.
 
 | Flag | Code |
 |---|---|

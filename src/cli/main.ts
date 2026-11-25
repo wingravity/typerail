@@ -19,7 +19,7 @@ Options for init:
 Run "typerail report --help" for report options.
   -h, --help  Show this help`;
 
-const FALLBACK_SPEC = "github:wingravity/typerail";
+const FALLBACK_SPEC = "latest";
 
 async function packageSpec(): Promise<string> {
   const text = await readTextFile(join(import.meta.dirname, "../../package.json"));
@@ -28,11 +28,8 @@ async function packageSpec(): Promise<string> {
   if (record === undefined) {
     return FALLBACK_SPEC;
   }
-  const { repository, version } = record;
-  if (typeof repository !== "string" || typeof version !== "string") {
-    return FALLBACK_SPEC;
-  }
-  return `${repository}#v${version}`;
+  const { version } = record;
+  return typeof version === "string" ? `^${version}` : FALLBACK_SPEC;
 }
 
 function printReport(report: InitReport, dryRun: boolean): void {

@@ -6,7 +6,7 @@ body:
     id: code
     attributes:
       label: Code
-      description: The smallest code sample that type-checks with typerail/tsconfig.json and should be reported.
+      description: The smallest code sample that type-checks with @wingravity/typerail/tsconfig.json and should be reported.
       render: ts
     validations:
       required: true

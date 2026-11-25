@@ -83,13 +83,13 @@ Checks that `strict` leaves out. Each code applies when the project turns the fl
 
 | Code | Gap | Priority | Checked by |
 |---|---|---|---|
-| [TR601](TR601.md) | strict is off | P1 | `strict` in `typerail/tsconfig.json` |
-| [TR602](TR602.md) | Unchecked index access | P2 | `noUncheckedIndexedAccess` in `typerail/tsconfig.json` |
-| [TR603](TR603.md) | undefined stored in an optional property | P3 | `exactOptionalPropertyTypes` in `typerail/tsconfig.json` |
-| [TR604](TR604.md) | Caught value treated as an Error | P2 | `useUnknownInCatchVariables` in `typerail/tsconfig.json` |
-| [TR605](TR605.md) | Switch case fallthrough | P1 | `noFallthroughCasesInSwitch` in `typerail/tsconfig.json` |
-| [TR606](TR606.md) | Missing side-effect import | P0 | `noUncheckedSideEffectImports` in `typerail/tsconfig.json` |
-| [TR607](TR607.md) | Import with the wrong letter case | P0 | `forceConsistentCasingInFileNames` in `typerail/tsconfig.json` |
+| [TR601](TR601.md) | strict is off | P1 | `strict` in `@wingravity/typerail/tsconfig.json` |
+| [TR602](TR602.md) | Unchecked index access | P2 | `noUncheckedIndexedAccess` in `@wingravity/typerail/tsconfig.json` |
+| [TR603](TR603.md) | undefined stored in an optional property | P3 | `exactOptionalPropertyTypes` in `@wingravity/typerail/tsconfig.json` |
+| [TR604](TR604.md) | Caught value treated as an Error | P2 | `useUnknownInCatchVariables` in `@wingravity/typerail/tsconfig.json` |
+| [TR605](TR605.md) | Switch case fallthrough | P1 | `noFallthroughCasesInSwitch` in `@wingravity/typerail/tsconfig.json` |
+| [TR606](TR606.md) | Missing side-effect import | P0 | `noUncheckedSideEffectImports` in `@wingravity/typerail/tsconfig.json` |
+| [TR607](TR607.md) | Import with the wrong letter case | P0 | `forceConsistentCasingInFileNames` in `@wingravity/typerail/tsconfig.json` |
 
 ## Priorities
 

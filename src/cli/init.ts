@@ -5,7 +5,8 @@ import { ensureDir, readTextFile, writeTextFile, type FsError } from "../interna
 import { asArray, asRecord, parseJsonc, setTopLevelProperty } from "./jsonc.ts";
 import { SUPPRESSIONS_API_VERSION, supportsSuppressionsApi } from "./eslint-version.ts";
 
-export const TSCONFIG_ENTRY = "typerail/tsconfig.json";
+export const PACKAGE_NAME = "@wingravity/typerail";
+export const TSCONFIG_ENTRY = `${PACKAGE_NAME}/tsconfig.json`;
 export const ESLINT_EXTENSION = "dbaeumer.vscode-eslint";
 export const CHECK_SCRIPT = "tsc --noEmit && eslint .";
 const PEERS = ["typescript", "eslint", "typescript-eslint"];
@@ -53,7 +54,7 @@ async function readOptional(path: string): AsyncResult<string | undefined, strin
 }
 
 function eslintTemplate(): string {
-  return `import typerail from "typerail/eslint";
+  return `import typerail from "${PACKAGE_NAME}/eslint";
 
 export default [
   { ignores: ["dist/**", "build/**", "coverage/**"] },
@@ -78,7 +79,7 @@ This project uses [typerail](https://github.com/wingravity/typerail), which repo
 - Type parameters that only read an array or object as readonly (\`readonly T[]\`, \`Readonly<T>\`, \`ReadonlySet<T>\`).
 - \`// eslint-disable\` comments have no effect. Do not add them, and do not weaken \`eslint.config.js\` or \`tsconfig.json\` to make the check pass.
 - Run \`npx typerail report --next 20\` for the highest-priority findings, each with a fix instruction.
-- Every finding has a code such as TR101. Its explanation and fix are in \`node_modules/typerail/docs/gaps/\`.
+- Every finding has a code such as TR101. Its explanation and fix are in \`node_modules/${PACKAGE_NAME}/docs/gaps/\`.
 ${AGENTS_END}`;
 }
 
@@ -154,8 +155,8 @@ interface ExistingFile {
 
 function planEslint(existing: ExistingFile | undefined, moduleType: boolean, force: boolean): Change {
   const file = existing?.name ?? (moduleType ? "eslint.config.js" : "eslint.config.mjs");
-  if (existing?.text.includes("typerail/eslint") === true) {
-    return { file, status: "unchanged", detail: "already uses typerail/eslint" };
+  if (existing?.text.includes(`${PACKAGE_NAME}/eslint`) === true) {
+    return { file, status: "unchanged", detail: `already uses ${PACKAGE_NAME}/eslint` };
   }
   if (existing !== undefined && !force) {
     return {
@@ -195,17 +196,17 @@ function planPackageJson(
     notes.push(`Kept your existing "check" script. typerail expects: ${CHECK_SCRIPT}`);
   }
 
-  if (devDependencies["typerail"] === undefined && dependencies["typerail"] === undefined) {
+  if (devDependencies[PACKAGE_NAME] === undefined && dependencies[PACKAGE_NAME] === undefined) {
     const updated = setTopLevelProperty(file, content, "devDependencies", {
       ...devDependencies,
-      typerail: packageSpec,
+      [PACKAGE_NAME]: packageSpec,
     });
     if (!updated.ok) {
       return updated;
     }
     content = updated.value;
     details.push(`typerail dev dependency (${packageSpec})`);
-  } else if (devDependencies["typerail"] === undefined) {
+  } else if (devDependencies[PACKAGE_NAME] === undefined) {
     notes.push("typerail is in dependencies. Move it to devDependencies: it has no runtime code.");
   }
 

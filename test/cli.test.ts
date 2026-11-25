@@ -8,7 +8,7 @@ import { AGENTS_END, AGENTS_START, applyInit, CHECK_SCRIPT, planInit, type InitR
 import { parseJsonc } from "../src/cli/jsonc.ts";
 import { supportsSuppressionsApi } from "../src/cli/eslint-version.ts";
 
-const SPEC = "github:wingravity/typerail#v1.2.3";
+const SPEC = "^1.2.3";
 let dir = "";
 
 beforeEach(async () => {
@@ -73,15 +73,15 @@ describe("typerail init", () => {
     assert.ok(tsconfig.includes("/* build output */"));
     const parsed = parseJsonc("tsconfig.json", tsconfig);
     assert.ok(parsed.ok);
-    assert.deepEqual(parsed.value["extends"], ["@tsconfig/node22/tsconfig.json", "typerail/tsconfig.json"]);
+    assert.deepEqual(parsed.value["extends"], ["@tsconfig/node22/tsconfig.json", "@wingravity/typerail/tsconfig.json"]);
 
     const pkg = parseJsonc("package.json", await read("package.json"));
     assert.ok(pkg.ok);
     assert.deepEqual(pkg.value["scripts"], { check: CHECK_SCRIPT });
-    assert.deepEqual(pkg.value["devDependencies"], { typerail: SPEC });
+    assert.deepEqual(pkg.value["devDependencies"], { "@wingravity/typerail": SPEC });
     assert.equal(pkg.value["dependencies"], undefined);
 
-    assert.ok((await read("eslint.config.js")).includes('from "typerail/eslint"'));
+    assert.ok((await read("eslint.config.js")).includes('from "@wingravity/typerail/eslint"'));
     const settings = parseJsonc("settings.json", await read(".vscode/settings.json"));
     assert.ok(settings.ok);
     assert.deepEqual(settings.value, {
@@ -131,7 +131,7 @@ describe("typerail init", () => {
     await init();
     const parsed = parseJsonc("tsconfig.json", await read("tsconfig.json"));
     assert.ok(parsed.ok);
-    assert.deepEqual(parsed.value["extends"], ["./base.json", "typerail/tsconfig.json"]);
+    assert.deepEqual(parsed.value["extends"], ["./base.json", "@wingravity/typerail/tsconfig.json"]);
     assert.deepEqual(parsed.value["include"], ["src"]);
   });
 
@@ -141,7 +141,7 @@ describe("typerail init", () => {
     await init();
     const parsed = parseJsonc("tsconfig.json", await read("tsconfig.json"));
     assert.ok(parsed.ok);
-    assert.equal(parsed.value["extends"], "typerail/tsconfig.json");
+    assert.equal(parsed.value["extends"], "@wingravity/typerail/tsconfig.json");
   });
 
   it("leaves an existing ESLint config alone unless --force", async () => {
@@ -152,11 +152,11 @@ describe("typerail init", () => {
     const kept = await init();
     assert.equal(statuses(kept)["eslint.config.js"], "skipped");
     assert.equal(await read("eslint.config.js"), "export default [];\n");
-    assert.ok(kept.notes.some((note) => note.includes("typerail/eslint")));
+    assert.ok(kept.notes.some((note) => note.includes("@wingravity/typerail/eslint")));
 
     const forced = await init({ force: true });
     assert.equal(statuses(forced)["eslint.config.js"], "updated");
-    assert.ok((await read("eslint.config.js")).includes("typerail/eslint"));
+    assert.ok((await read("eslint.config.js")).includes("@wingravity/typerail/eslint"));
   });
 
   it("merges into existing VS Code settings and keeps their comments", async () => {
@@ -193,7 +193,7 @@ describe("typerail init", () => {
   });
 
   it("leaves typerail in dependencies and asks to move it", async () => {
-    await write("package.json", `{ "name": "app", "dependencies": { "typerail": "${SPEC}" } }`);
+    await write("package.json", `{ "name": "app", "dependencies": { "@wingravity/typerail": "${SPEC}" } }`);
     await write("tsconfig.json", `{}`);
     const report = await init();
     const pkg = parseJsonc("package.json", await read("package.json"));

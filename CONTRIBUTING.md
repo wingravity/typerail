@@ -31,7 +31,7 @@ Custom rules in `src/eslint/rules/` are tested with `RuleTester` in `test/rules.
 A new gap needs four things, and `test/gaps.test.ts` fails until all of them exist:
 
 1. An entry in `src/gaps.ts` with the next free code in its category. Codes are never renumbered or reused.
-2. A proof in `test/gaps/<code>.ts` that exports `proof()`. TypeScript must accept it under `typerail/tsconfig.json`, and running it must throw, or return `{ expected, actual }` with different values. For a compiler flag, TypeScript must accept it with the flag off and reject it with the flag on.
+2. A proof in `test/gaps/<code>.ts` that exports `proof()`. TypeScript must accept it under `config/tsconfig.json`, and running it must throw, or return `{ expected, actual }` with different values. For a compiler flag, TypeScript must accept it with the flag off and reject it with the flag on.
 3. A page in `docs/gaps/<code>.md` that shows the proof unchanged, and a row in `docs/gaps/README.md`.
 4. A rule, a flag or the words "Not checked yet" on the page.
 
@@ -39,7 +39,7 @@ When a TypeScript release rejects a proof, the gap is fixed in that release. Set
 
 ## Scope
 
-typerail reports code that TypeScript accepts but that can fail at runtime. A new rule needs a fixture that type-checks under `typerail/tsconfig.json` and fails when it runs. Style, formatting, error-handling style and maintainability rules are out of scope.
+typerail reports code that TypeScript accepts but that can fail at runtime. A new rule needs a fixture that type-checks under `config/tsconfig.json` and fails when it runs. Style, formatting, error-handling style and maintainability rules are out of scope.
 
 ## Pull requests
 
@@ -47,4 +47,4 @@ Keep changes focused. Code comments are reserved for logic that cannot be unders
 
 ## Releases
 
-`main` holds source only. Running the **Release** workflow with a version such as `0.2.0` runs the checks, builds, commits `dist/` onto a release commit, tags it `v0.2.0`, and moves the `release` branch (the repository's default) to it. That is why `npx github:wingravity/typerail init` runs the latest release, and why installs never need a build step.
+typerail is published to npm as `@wingravity/typerail`. To release, set the version in `package.json`, commit, tag it `v<version>`, and run `npm publish`. `prepublishOnly` runs the type check, lint, tests and build first, so a failing check stops the release and `dist/` is always built from the tagged source.
