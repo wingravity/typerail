@@ -184,3 +184,47 @@ export function isFromDefaultLibrary(program: ts.Program, symbol: ts.Symbol | un
   const declarations = symbol?.getDeclarations() ?? [];
   return declarations.length > 0 && declarations.every((declaration) => program.isSourceFileDefaultLibrary(declaration.getSourceFile()));
 }
+
+const PRIMITIVE = ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BigIntLike | ts.TypeFlags.BooleanLike;
+
+export function brandBase(type: ts.Type): ts.Type | undefined {
+  if (!type.isIntersection()) {
+    return undefined;
+  }
+  const primitives = type.types.filter((part) => (part.getFlags() & PRIMITIVE) !== 0);
+  const others = type.types.filter((part) => (part.getFlags() & PRIMITIVE) === 0);
+  return primitives.length === 1 && others.every((part) => (part.getFlags() & ts.TypeFlags.Object) !== 0) ? primitives[0] : undefined;
+}
+
+export function isBrandedPrimitive(type: ts.Type): boolean {
+  return brandBase(type) !== undefined;
+}
+
+function acceptsPart(checker: ts.TypeChecker, value: ts.Type, slot: ts.Type, depth: number): boolean {
+  if (checker.isTypeAssignableTo(value, slot)) {
+    return true;
+  }
+  const base = brandBase(slot);
+  if (base !== undefined) {
+    return checker.isTypeAssignableTo(brandBase(value) ?? value, base);
+  }
+  if (depth >= 3 || (value.getFlags() & ts.TypeFlags.Object) === 0 || (slot.getFlags() & ts.TypeFlags.Object) === 0) {
+    return false;
+  }
+  if (slot.getCallSignatures().length > 0 || checker.isArrayType(slot) || checker.isTupleType(slot)) {
+    return false;
+  }
+  return checker.getPropertiesOfType(slot).every((property) => {
+    const valueProperty = checker.getPropertyOfType(value, property.getName());
+    if (valueProperty === undefined) {
+      return (property.getFlags() & ts.SymbolFlags.Optional) !== 0;
+    }
+    return acceptsIgnoringBrands(checker, checker.getTypeOfSymbol(valueProperty), checker.getTypeOfSymbol(property), depth + 1);
+  });
+}
+
+export function acceptsIgnoringBrands(checker: ts.TypeChecker, value: ts.Type, slot: ts.Type, depth = 0): boolean {
+  const values = value.isUnion() ? value.types : [value];
+  const slots = slot.isUnion() ? slot.types : [slot];
+  return values.every((part) => slots.some((candidate) => acceptsPart(checker, part, candidate, depth)));
+}

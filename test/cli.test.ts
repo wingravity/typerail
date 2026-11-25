@@ -236,4 +236,22 @@ describe("typerail binary", () => {
     assert.equal(fixed.status, 0, fixed.stdout);
     assert.ok(fixed.stdout.includes("is fixed"), fixed.stdout);
   });
+
+  it("follows project references from a solution-style tsconfig", async () => {
+    await write("tsconfig.json", `{ "files": [], "references": [{ "path": "./tsconfig.app.json" }] }`);
+    await write("tsconfig.app.json", `{ "compilerOptions": { "strict": true, "target": "ES2022", "module": "NodeNext", "types": [] }, "include": ["src"] }`);
+    await write("src/index.ts", "export const loose = (value: unknown): string => value as string;\n");
+    const run = spawnSync(process.execPath, [main, "check"], { cwd: dir, encoding: "utf8" });
+    assert.equal(run.status, 1, run.stderr);
+    assert.ok(run.stdout.includes("TR201 src/index.ts"));
+  });
+
+  it("refuses to check a project whose dependencies are not installed", async () => {
+    await write("package.json", `{ "name": "app", "dependencies": { "left-pad": "1.3.0" } }`);
+    await write("tsconfig.json", `{ "include": ["*.ts"] }`);
+    await write("index.ts", "export const x = 1;\n");
+    const run = spawnSync(process.execPath, [main, "check"], { cwd: dir, encoding: "utf8" });
+    assert.equal(run.status, 1);
+    assert.ok(run.stderr.includes("dependencies are not installed"));
+  });
 });

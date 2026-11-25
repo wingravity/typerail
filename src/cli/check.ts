@@ -45,6 +45,9 @@ export async function runCheck(args: readonly string[]): Promise<number> {
     return 1;
   }
   const findings = report.value.findings;
+  for (const warning of report.value.warnings) {
+    console.error(`typerail check: warning: ${warning}`);
+  }
 
   if (values["update-baseline"] === true) {
     const written = await writeBaseline(cwd, findings);

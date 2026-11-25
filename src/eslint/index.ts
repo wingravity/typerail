@@ -65,7 +65,7 @@ export const RUNTIME_HOLE_RULES: FlatConfig.Rules = {
       allowForKnownSafeCalls: [{ from: "package", package: "node:test", name: [...NODE_TEST_FUNCTIONS] }],
     },
   ],
-  "@typescript-eslint/no-misused-promises": "error",
+  "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }],
   "@typescript-eslint/switch-exhaustiveness-check": [
     "error",
     { considerDefaultExhaustiveForUnions: false, requireDefaultForNonUnion: true },

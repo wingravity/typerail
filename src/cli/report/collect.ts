@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { ESLint, type Linter } from "eslint";
@@ -28,6 +29,7 @@ export interface Report {
   readonly generatedAt: string;
   readonly project: string;
   readonly findings: readonly Finding[];
+  readonly warnings: readonly string[];
 }
 
 export interface AnalyzeOptions {
@@ -63,48 +65,110 @@ export async function typerailCompilerOptions(): AsyncResult<ts.CompilerOptions,
 interface TypeScriptResult {
   readonly findings: Finding[];
   readonly files: string[];
+  readonly configs: string[];
 }
 
-function collectTypeScript(cwd: string, configPath: string, flags: ts.CompilerOptions): Result<TypeScriptResult, string> {
+interface ParsedConfig {
+  readonly path: string;
+  readonly parsed: ts.ParsedCommandLine;
+}
+
+function readConfig(configPath: string): Result<ts.ParsedCommandLine, string> {
   const read = ts.readConfigFile(configPath, (path) => ts.sys.readFile(path));
   if (read.error !== undefined) {
     return err(ts.flattenDiagnosticMessageText(read.error.messageText, "\n"));
   }
-  const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(configPath));
-  const program = ts.createProgram({ rootNames: parsed.fileNames, options: { ...parsed.options, ...flags, noEmit: true } });
-  const findings: Finding[] = [];
-  for (const diagnostic of ts.getPreEmitDiagnostics(program)) {
-    const source = diagnostic.file;
-    if (source === undefined || diagnostic.start === undefined || source.fileName.includes("/node_modules/")) {
-      continue;
-    }
-    const position = source.getLineAndCharacterOfPosition(diagnostic.start);
-    findings.push(
-      finding(
-        {
-          source: "typescript",
-          rule: `TS${String(diagnostic.code)}`,
-          file: relative(cwd, source.fileName),
-          line: position.line + 1,
-          column: position.character + 1,
-          message: ts.flattenDiagnosticMessageText(diagnostic.messageText, " "),
-        },
-        classifyTypeScript(diagnostic.code),
-      ),
-    );
-  }
-  const files = parsed.fileNames.filter((file) => LINTED_SOURCE.test(file) && !file.includes("/node_modules/"));
-  return ok({ findings, files });
+  return ok(ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(configPath), undefined, configPath));
 }
 
-function cliConfig(configPath: string): Linter.Config[] {
+function configsToCheck(configPath: string): Result<ParsedConfig[], string> {
+  const configs: ParsedConfig[] = [];
+  const seen = new Set<string>();
+  const queue = [configPath];
+  for (let index = 0; index < queue.length && index < 100; index++) {
+    const path = queue[index];
+    if (path === undefined || seen.has(path)) {
+      continue;
+    }
+    seen.add(path);
+    const parsed = readConfig(path);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    if (parsed.value.fileNames.length > 0) {
+      configs.push({ path, parsed: parsed.value });
+    }
+    for (const reference of parsed.value.projectReferences ?? []) {
+      queue.push(ts.resolveProjectReferencePath(reference));
+    }
+  }
+  return ok(configs);
+}
+
+function compilerOptions(parsed: ts.ParsedCommandLine, flags: ts.CompilerOptions): ts.CompilerOptions {
+  const major = Number(ts.versionMajorMinor.split(".")[0]);
+  const deprecations = major >= 6 && parsed.options.ignoreDeprecations === undefined ? { ignoreDeprecations: "6.0" } : {};
+  return { ...parsed.options, ...flags, ...deprecations, noEmit: true, composite: false, incremental: false };
+}
+
+function diagnosticFinding(cwd: string, configPath: string, diagnostic: ts.Diagnostic): Finding | undefined {
+  const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, " ");
+  const rule = `TS${String(diagnostic.code)}`;
+  const source = diagnostic.file;
+  if (source === undefined || diagnostic.start === undefined) {
+    if (diagnostic.category !== ts.DiagnosticCategory.Error) {
+      return undefined;
+    }
+    return finding({ source: "typescript", rule, file: relative(cwd, configPath), line: 1, column: 1, message }, UNPARSED_FILE);
+  }
+  if (source.fileName.includes("/node_modules/")) {
+    return undefined;
+  }
+  const position = source.getLineAndCharacterOfPosition(diagnostic.start);
+  const file = relative(cwd, source.fileName);
+  return finding(
+    { source: "typescript", rule, file, line: position.line + 1, column: position.character + 1, message },
+    source.fileName.endsWith(".json") ? UNPARSED_FILE : classifyTypeScript(diagnostic.code),
+  );
+}
+
+function collectTypeScript(cwd: string, configPath: string, flags: ts.CompilerOptions): Result<TypeScriptResult, string> {
+  const configs = configsToCheck(configPath);
+  if (!configs.ok) {
+    return configs;
+  }
+  if (configs.value.length === 0) {
+    const name = relative(cwd, configPath);
+    return err(`${name === "" ? configPath : name} and the projects it references include no files to check.`);
+  }
+  const findings = new Map<string, Finding>();
+  const files = new Set<string>();
+  for (const { path, parsed } of configs.value) {
+    const program = ts.createProgram({ rootNames: parsed.fileNames, options: compilerOptions(parsed, flags), projectReferences: [] });
+    const diagnostics = [...parsed.errors, ...program.getOptionsDiagnostics(), ...ts.getPreEmitDiagnostics(program)];
+    for (const diagnostic of diagnostics) {
+      const found = diagnosticFinding(cwd, path, diagnostic);
+      if (found !== undefined) {
+        findings.set(`${found.file}:${String(found.line)}:${String(found.column)}:${found.rule}`, found);
+      }
+    }
+    for (const file of parsed.fileNames) {
+      if (LINTED_SOURCE.test(file) && !file.includes("/node_modules/")) {
+        files.add(file);
+      }
+    }
+  }
+  return ok({ findings: [...findings.values()], files: [...files], configs: configs.value.map((config) => config.path) });
+}
+
+function cliConfig(configs: readonly string[]): Linter.Config[] {
   return [
     { linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: "off" } },
     {
       files: [...DEFAULT_FILES],
       languageOptions: {
         parser: tseslint.parser,
-        parserOptions: { project: configPath, tsconfigRootDir: dirname(configPath) },
+        parserOptions: { project: [...configs] },
       },
       plugins: { "@typescript-eslint": tseslint.plugin, typerail: compatiblePlugin },
       rules: typerailRules(),
@@ -113,7 +177,7 @@ function cliConfig(configPath: string): Linter.Config[] {
   ];
 }
 
-async function collectEslint(cwd: string, configPath: string, files: readonly string[]): AsyncResult<Finding[], string> {
+async function collectEslint(cwd: string, configs: readonly string[], files: readonly string[]): AsyncResult<Finding[], string> {
   if (files.length === 0) {
     return ok([]);
   }
@@ -122,7 +186,7 @@ async function collectEslint(cwd: string, configPath: string, files: readonly st
       new ESLint({
         cwd,
         overrideConfigFile: true,
-        overrideConfig: cliConfig(configPath),
+        overrideConfig: cliConfig(configs),
         warnIgnored: false,
       }),
     (cause) => `ESLint could not start: ${describeCause(cause)}`,
@@ -174,8 +238,57 @@ function compareFindings(a: Finding, b: Finding): number {
   return keys.find((difference) => difference !== 0) ?? 0;
 }
 
+function ancestors(directory: string): string[] {
+  const list: string[] = [];
+  let current = directory;
+  for (let depth = 0; depth < 64; depth++) {
+    list.push(current);
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return list;
+}
+
+async function declaredDependencies(cwd: string): Promise<{ readonly root: string; readonly names: string[] } | undefined> {
+  const root = ancestors(cwd).find((directory) => existsSync(join(directory, "package.json")));
+  if (root === undefined) {
+    return undefined;
+  }
+  const text = await readTextFile(join(root, "package.json"));
+  const parsed = text.ok ? parseJsonc("package.json", text.value) : undefined;
+  if (parsed?.ok !== true) {
+    return undefined;
+  }
+  const names = ["dependencies", "devDependencies"].flatMap((field) => Object.keys(asRecord(parsed.value[field]) ?? {}));
+  return { root, names: names.filter((name) => name !== "@wingravity/typerail") };
+}
+
+async function dependencyCheck(cwd: string): AsyncResult<string[], string> {
+  const declared = await declaredDependencies(cwd);
+  if (declared === undefined || declared.names.length === 0) {
+    return ok([]);
+  }
+  const directories = ancestors(declared.root);
+  const missing = declared.names.filter((name) => !directories.some((directory) => existsSync(join(directory, "node_modules", name))));
+  if (missing.length === declared.names.length) {
+    return err("The project's dependencies are not installed. Install them first (for example npm install): typerail needs them for type information.");
+  }
+  if (missing.length === 0) {
+    return ok([]);
+  }
+  const listed = missing.slice(0, 5).join(", ") + (missing.length > 5 ? ` and ${String(missing.length - 5)} more` : "");
+  return ok([`${String(missing.length)} declared dependencies are not installed (${listed}). Findings that depend on their types may be wrong.`]);
+}
+
 export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, string> {
   const { cwd } = options;
+  const dependencies = await dependencyCheck(cwd);
+  if (!dependencies.ok) {
+    return dependencies;
+  }
   const configPath = resolve(cwd, options.tsconfig ?? "tsconfig.json");
   const flags = await typerailCompilerOptions();
   if (!flags.ok) {
@@ -185,7 +298,7 @@ export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, 
   if (!typescript.ok) {
     return typescript;
   }
-  const eslint = await collectEslint(cwd, configPath, typescript.value.files);
+  const eslint = await collectEslint(cwd, typescript.value.configs, typescript.value.files);
   if (!eslint.ok) {
     return eslint;
   }
@@ -193,5 +306,6 @@ export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, 
     generatedAt: new Date().toISOString(),
     project: cwd,
     findings: [...typescript.value.findings, ...eslint.value].sort(compareFindings),
+    warnings: dependencies.value,
   });
 }

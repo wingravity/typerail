@@ -56,6 +56,7 @@ typed.run("no-mutable-array-widening", noMutableArrayWidening, {
     `${animals} export const d = first(dogs);`,
     `${animals} export const names: string[] = dogs.map((d) => d.name);`,
     `${animals} export const anything: unknown[] = dogs;`,
+    `type Seconds = number & { readonly __brand: "Seconds" }; declare const rows: { seconds: Seconds }[]; export const plain: { seconds: number }[] = rows;`,
   ],
   invalid: [
     { code: `${animals} export const a: Animal[] = dogs;`, errors: [{ messageId: "widened" }] },
@@ -84,6 +85,8 @@ typed.run("no-mutable-property-widening", noMutablePropertyWidening, {
     `${animals} declare const counts: { a: number }; export const c: Readonly<Record<string, number>> = counts;`,
     `${animals} declare const holder2: { pet: Dog }; export const h: { pet: unknown } = holder2;`,
     `${animals} declare const holder2: { pet: Dog }; export const h: Record<string, unknown> = holder2;`,
+    `type Seconds = number & { readonly __brand: "Seconds" }; declare const total: { seconds: Seconds }; export const plain: { seconds: number } = total;`,
+    `declare const route: { handler: () => string }; export const r: { handler: (input: string) => string } = route;`,
   ],
   invalid: [
     {
@@ -209,11 +212,19 @@ typed.run("no-return-type-argument", noReturnTypeArgument, {
     `export const set = new Set<string>();`,
     `declare function make<T>(): Map<string, T>; export const m = make<number>();`,
     `declare function parseAs<T>(text: string): T; export const u: unknown = parseAs("1");`,
+    `type StaffId = number & { readonly __brand: "StaffId" }; declare function column(): { $type<T>(): T }; export const id = column().$type<StaffId>();`,
+    `declare function createSignal<T>(): [() => T | undefined, (value: T | undefined) => void]; export const signal = createSignal<{ id: string }>();`,
   ],
   invalid: [
     { code: `declare function parseAs<T>(text: string): T; export const n = parseAs<number>("1");`, errors: [{ messageId: "returnOnly" }] },
     { code: `declare function get<T>(url: string): Promise<T>; export const p = get<{ id: string }>("/u");`, errors: [{ messageId: "returnOnly" }] },
     { code: `declare function find<E extends object>(selector: string): E | null; export const e = find<{ id: string }>("#x");`, errors: [{ messageId: "returnOnly" }] },
+    { code: `declare function useParams<T>(): T; export const p = useParams<{ slug: string }>();`, errors: [{ messageId: "returnOnly" }] },
+    { code: `declare function column(): { $type<T>(): T }; export const c = column().$type<"a" | "b">();`, errors: [{ messageId: "returnOnly" }] },
+    {
+      code: `interface Column<C, T> { c: C; t: T } declare function jsonb(): { $type<T>(): Column<string, T> }; export const c = jsonb().$type<string[]>();`,
+      errors: [{ messageId: "returnOnly" }],
+    },
   ],
 });
 

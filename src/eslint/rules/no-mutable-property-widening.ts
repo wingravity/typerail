@@ -3,7 +3,16 @@ import { isPropertyReadonlyInType } from "@typescript-eslint/type-utils";
 import ts from "typescript";
 import { docsUrl } from "../../gaps.ts";
 import { isWidenedArray } from "./no-mutable-array-widening.ts";
-import { isArrayLike, isExternalLibraryType, isFromLibrary, isObjectType, isTopLike, typedContext, wideningListeners } from "./slots.ts";
+import {
+  acceptsIgnoringBrands,
+  isArrayLike,
+  isExternalLibraryType,
+  isFromLibrary,
+  isObjectType,
+  isTopLike,
+  typedContext,
+  wideningListeners,
+} from "./slots.ts";
 
 type MessageId = "widened";
 
@@ -47,11 +56,11 @@ export function findPropertyWidening(
     const sourceType = checker.getNonNullableType(checker.getTypeOfSymbol(sourceProperty));
     const targetType = checker.getNonNullableType(checker.getTypeOfSymbol(targetProperty));
     const path = `${prefix}${name}`;
-    if (isTopLike(targetType)) {
+    if (isTopLike(targetType) || (sourceType.getFlags() & ts.TypeFlags.Never) !== 0 || targetType.getCallSignatures().length > 0) {
       continue;
     }
     const writable = !isPropertyReadonlyInType(target, targetProperty, checker);
-    if (writable && !checker.isTypeAssignableTo(targetType, sourceType)) {
+    if (writable && !acceptsIgnoringBrands(checker, targetType, sourceType)) {
       return { path, sourceType, targetType };
     }
     if (isWidenedArray(checker, sourceType, targetType)) {
@@ -70,7 +79,7 @@ export function findPropertyWidening(
     }
     for (const sourceProperty of checker.getPropertiesOfType(source)) {
       const sourceType = checker.getNonNullableType(checker.getTypeOfSymbol(sourceProperty));
-      if (!checker.isTypeAssignableTo(index.type, sourceType)) {
+      if (!acceptsIgnoringBrands(checker, index.type, sourceType)) {
         return { path: `${prefix}${sourceProperty.getName()}`, sourceType, targetType: index.type };
       }
     }

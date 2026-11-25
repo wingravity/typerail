@@ -52,7 +52,9 @@ npm run typerail
 
 ## Check
 
-`typerail check` type-checks the project with typerail's compiler flags and runs typerail's rules on the files the project's tsconfig includes. It exits with code 1 when there are findings, so it works as a CI step.
+`typerail check` type-checks the project with typerail's compiler flags and runs typerail's rules on the files the project's tsconfig includes, following `references` in solution-style tsconfigs such as Vite's. It exits with code 1 when there are findings, so it works as a CI step.
+
+Type information comes from the project's dependencies, so install them first. typerail stops with a message when none are installed, and warns when some are missing.
 
 ```sh
 npx typerail check                      # print findings, exit 1 if there are any

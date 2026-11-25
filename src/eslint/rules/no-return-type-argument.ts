@@ -2,7 +2,7 @@ import type { TSESTree } from "@typescript-eslint/types";
 import type { TSESLint } from "@typescript-eslint/utils";
 import ts from "typescript";
 import { docsUrl } from "../../gaps.ts";
-import { typedContext } from "./slots.ts";
+import { isBrandedPrimitive, typedContext } from "./slots.ts";
 
 type MessageId = "returnOnly";
 
@@ -28,6 +28,21 @@ function claimsValue(node: ts.Node, name: string): boolean {
     }
   }
   return ts.forEachChild(node, (child) => (claimsValue(child, name) ? true : undefined)) === true;
+}
+
+function appearsWithoutUndefined(node: ts.Node, name: string): boolean {
+  if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName) && node.typeName.text === name) {
+    const parent = node.parent;
+    return !(ts.isUnionTypeNode(parent) && parent.types.some((member) => member.kind === ts.SyntaxKind.UndefinedKeyword));
+  }
+  return ts.forEachChild(node, (child) => (appearsWithoutUndefined(child, name) ? true : undefined)) === true;
+}
+
+function isBrand(type: ts.Type): boolean {
+  const parts = (type.isUnion() ? type.types : [type]).filter(
+    (part) => (part.getFlags() & (ts.TypeFlags.Null | ts.TypeFlags.Undefined)) === 0,
+  );
+  return parts.length > 0 && parts.every((part) => isBrandedPrimitive(part));
 }
 
 export const noReturnTypeArgument: TSESLint.RuleModule<MessageId> = {
@@ -73,7 +88,10 @@ export const noReturnTypeArgument: TSESLint.RuleModule<MessageId> = {
           }
           const name = parameter.name.text;
           const inParameters = declaration.parameters.some((p) => p.type !== undefined && references(p.type, name));
-          if (!inParameters && claimsValue(returnType, name)) {
+          const emptyState = node.arguments.length === 0 && !appearsWithoutUndefined(returnType, name);
+          const tsArgument = toTs(argument);
+          const brand = ts.isTypeNode(tsArgument) && isBrand(checker.getTypeFromTypeNode(tsArgument));
+          if (!inParameters && !emptyState && !brand && claimsValue(returnType, name)) {
             context.report({
               node: argument,
               messageId: "returnOnly",

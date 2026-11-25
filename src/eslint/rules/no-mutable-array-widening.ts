@@ -1,7 +1,7 @@
 import type { TSESLint } from "@typescript-eslint/utils";
 import ts from "typescript";
 import { docsUrl } from "../../gaps.ts";
-import { isTopLike, typedContext, wideningListeners } from "./slots.ts";
+import { acceptsIgnoringBrands, isTopLike, typedContext, wideningListeners } from "./slots.ts";
 
 type MessageId = "widened";
 
@@ -23,7 +23,7 @@ export function isWidenedArray(checker: ts.TypeChecker, source: ts.Type, target:
     sourceElement !== undefined &&
     targetElement !== undefined &&
     !isTopLike(targetElement) &&
-    !checker.isTypeAssignableTo(targetElement, sourceElement)
+    !acceptsIgnoringBrands(checker, targetElement, sourceElement)
   );
 }
 

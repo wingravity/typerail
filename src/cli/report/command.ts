@@ -55,6 +55,9 @@ export async function runReport(args: readonly string[]): Promise<number> {
     return 1;
   }
 
+  for (const warning of report.value.warnings) {
+    console.error(`typerail report: warning: ${warning}`);
+  }
   const out = typeof values.out === "string" ? values.out : undefined;
   if (next !== undefined && format === "md") {
     process.stdout.write(renderNext(report.value, next));

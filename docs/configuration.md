@@ -41,7 +41,7 @@
 | `@typescript-eslint/unbound-method` | [TR403](gaps/TR403.md) |
 | `@typescript-eslint/switch-exhaustiveness-check` | [TR404](gaps/TR404.md) |
 | `@typescript-eslint/no-floating-promises` | [TR501](gaps/TR501.md) |
-| `@typescript-eslint/no-misused-promises` | [TR502](gaps/TR502.md) |
+| `@typescript-eslint/no-misused-promises`, except in JSX attributes | [TR502](gaps/TR502.md) |
 
 The two rules marked with a typescript-eslint version are enabled only when the installed version has them.
 
