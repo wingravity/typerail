@@ -145,7 +145,6 @@ const DEFAULT_TYPESCRIPT: Classification = {
 
 export const UNPARSED_FILE: Classification = metaGap("TR001");
 
-export const INERT_INLINE_DISABLE: Classification = metaGap("TR002");
 
 const UNKNOWN_RULE: Classification = {
   priority: 4,

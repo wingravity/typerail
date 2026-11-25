@@ -14,12 +14,16 @@ if (d) d.bark(); // TypeError: d.bark is not a function
 
 Arrays are covariant in TypeScript, so a `Dog[]` can be used as an `Animal[]`, and a plain `Animal` ends up inside it. The type system has a number of gaps like this one. typerail catalogs them, gives each a code, and reports them.
 
-- **Gaps in the type system.** Writable properties and arrays used at a wider type, method parameters checked in both directions, tuples changed by array methods, unhandled promises, and the compiler flags that close the gaps `strict` leaves open.
-- **Unchecked claims.** `as`, `any`, `!`, `@ts-ignore`, hand-written type predicates, overload signatures and `get<User>(url)`-style type arguments tell the compiler facts that nothing verifies. `any` from `JSON.parse` or untyped libraries does the same without anyone writing it.
-- **No way around it.** `// eslint-disable` comments have no effect, and `typerail report` lists every rule or compiler flag that the project's configuration weakens.
-- **Ranked by consequence.** `typerail report` orders findings from "can stop the process" to "no runtime effect", with a fix instruction for each.
+```sh
+npx @wingravity/typerail check
+```
 
-typerail does not check style. Throwing or returning errors, loop forms, equality operators and truthiness checks are left to the project's own configuration, which typerail is added to rather than replacing.
+- **Gaps in the type system.** Writable properties and arrays used at a wider type, method parameters checked in both directions, tuples changed by array methods, unhandled promises, and the compiler checks that `strict` leaves out.
+- **Unchecked claims.** `as`, `any`, `!`, `@ts-ignore`, hand-written type predicates, overload signatures and `get<User>(url)`-style type arguments tell the compiler facts that nothing verifies. `any` from `JSON.parse` or untyped libraries does the same without anyone writing it.
+- **No configuration, no way around it.** typerail brings its own compiler flags and rules. It does not change the project's `tsconfig.json` or ESLint configuration, and nothing in them, including `// eslint-disable` comments, can weaken the check.
+- **Ranked by consequence.** Findings are ordered from "can stop the process" to "no runtime effect", each with a fix instruction and a link to its explanation.
+
+typerail does not check style. Throwing or returning errors, loop forms, equality operators and truthiness checks are left to the project's own tools.
 
 <p align="center"><img src=".github/assets/report.png" alt="Output of npx typerail report --next 4: findings grouped from P0 to P4, each with a file location, the rule and a fix instruction" width="820"></p>
 
@@ -41,24 +45,35 @@ Each example is a test. The test suite compiles every example with TypeScript an
 ```sh
 npx @wingravity/typerail init
 npm install
-npx typerail report --next 20
+npm run typerail
 ```
 
-`init` adds the configuration and the agent instructions to the project. `report` lists what needs attention, most dangerous first. `npm run check` runs the compiler and ESLint and fails on any finding; use it in CI.
+`init` adds typerail as a dev dependency, a `typerail` script that runs `typerail check`, and instructions for coding agents. It does not touch `tsconfig.json`, the ESLint configuration or editor settings.
 
-## Coding agents
+## Check
 
-Coding agents such as Claude Code, Codex, Copilot and Cursor write code that compiles and passes review, and when a check fails, they often make it pass by weakening it. typerail is built for that:
+`typerail check` type-checks the project with typerail's compiler flags and runs typerail's rules on the files the project's tsconfig includes. It exits with code 1 when there are findings, so it works as a CI step.
 
-- `// eslint-disable` comments have no effect, and a weakened rule or compiler flag shows up in the report.
-- `init` adds a typerail section to `AGENTS.md`, the instruction file these agents read. It names the banned escape hatches, the fixes, and the requirement that `npm run check` passes.
-- `npx typerail report --next 20` is a short, prioritized work queue with a fix instruction for each finding. `--format json` gives the same data in a stable shape.
+```sh
+npx typerail check                      # print findings, exit 1 if there are any
+npx typerail check --project tsconfig.app.json
+npx typerail check --format json
+npx typerail check --update-baseline    # record current findings, see below
+```
 
-The `AGENTS.md` section sits between `<!-- typerail:start -->` and `<!-- typerail:end -->`, and running `init` again refreshes it without touching the rest of the file. Claude Code reads `AGENTS.md` unless the project has a `CLAUDE.md`, so `init` adds an `@AGENTS.md` import to an existing `CLAUDE.md`.
+The project's own compiler options are kept, such as `module`, `target`, `paths` and `lib`. typerail adds `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and the other flags in [the catalog](docs/gaps/README.md#compiler-flags) on top, for its own analysis only.
+
+### Existing codebases
+
+```sh
+npx typerail check --update-baseline
+```
+
+This records the current findings in `typerail-baseline.json`, counted per file and code. Commit the file. From then on, `typerail check` fails only on findings beyond those counts, so new code must be clean while existing findings are fixed over time. When fixed findings make the baseline larger than needed, `check` says so; run `--update-baseline` again to shrink it.
 
 ## Report
 
-`typerail report` runs the TypeScript compiler and ESLint together and orders every finding by the worst realistic runtime consequence of its rule.
+`typerail report` runs the same analysis and orders every finding by the worst realistic runtime consequence of its rule, including findings in the baseline. On an existing codebase, it shows where to start.
 
 | Priority | Meaning | Examples |
 |---|---|---|
@@ -66,7 +81,7 @@ The `AGENTS.md` section sits between `<!-- typerail:start -->` and `<!-- typerai
 | P1: Silent wrong result | wrong data or behavior with no error raised | `as`, `any`, `Dog[]` used as a mutable `Animal[]`, bivariant methods, type predicates, non-exhaustive switches |
 | P2: Request fails | throws at runtime and fails one request | possibly undefined access, `!`, `field!: T`, tuples changed by `pop`, detached methods |
 | P3: Latent risk | lets through a value that later code may mishandle | `undefined` passed for an optional property |
-| P4: No runtime effect | clarity only | rules from the project's own configuration |
+| P4: No runtime effect | clarity only | |
 
 ```sh
 npx typerail report                 # writes typerail-report.md
@@ -74,95 +89,24 @@ npx typerail report --next 20       # the 20 highest-priority findings, with fix
 npx typerail report --format json   # all findings as JSON
 ```
 
-Production code is listed before tests. The report also lists the files with the most P0 to P2 findings and any typerail rule or compiler flag that the project's configuration turns off or downgrades.
+Production code is listed before tests, and the report lists the files with the most P0 to P2 findings. It always exits with code 0; use `typerail check` as the CI gate. Add `typerail-report.md` to `.gitignore` if it should not be committed.
 
-<details>
-<summary><b>Report options</b></summary>
+## Coding agents
 
-- `--project <tsconfig>` selects the tsconfig.
-- The report includes findings recorded in `eslint-suppressions.json`. `--respect-suppressions` leaves them out (requires ESLint 10.1 or later).
-- The command always exits with code 0. Use `npm run check` as the CI gate.
-- Add `typerail-report.md` to `.gitignore` if it should not be committed.
+Coding agents such as Claude Code, Codex, Copilot and Cursor write code that compiles and passes review, and when a check fails, they often make it pass by weakening it: an `as any`, an `// eslint-disable` comment, a compiler flag set to `false`. None of these affect typerail.
 
-</details>
+- `init` adds a typerail section to `AGENTS.md`, the instruction file these agents read. It names the unchecked claims to avoid, the fixes, and the requirement that `npm run typerail` passes.
+- `npx typerail report --next 20` is a short, prioritized work queue with a fix instruction for each finding.
+- Every finding links to a page that explains its code, which an agent can read in `node_modules/@wingravity/typerail/docs/gaps/`.
 
-## Setup
+The `AGENTS.md` section sits between `<!-- typerail:start -->` and `<!-- typerail:end -->`, and running `init` again refreshes it without touching the rest of the file. Claude Code reads `AGENTS.md` unless the project has a `CLAUDE.md`, so `init` adds an `@AGENTS.md` import to an existing `CLAUDE.md`.
 
-Requires Node 20.3 or later, TypeScript 5.8 to 6.0, ESLint 9.35 or later (or ESLint 10) and typescript-eslint 8.30 or later.
+## Continuous integration
 
-<details>
-<summary><b>What <code>init</code> changes</b></summary>
-
-| File | Change |
-|---|---|
-| `tsconfig.json` | adds `@wingravity/typerail/tsconfig.json` to `extends` (comments and formatting are kept) |
-| `eslint.config.js` | creates it, or prints the lines to add if one exists |
-| `package.json` | adds a `check` script and `@wingravity/typerail` as a dev dependency |
-| `AGENTS.md` | adds a typerail section with instructions for coding agents, or creates the file |
-| `CLAUDE.md` | if it exists, adds `@AGENTS.md` so Claude Code also reads those instructions; never created |
-| `.vscode/extensions.json` | recommends the ESLint extension |
-| `.vscode/settings.json` | uses the project's TypeScript version and, with ESLint 10.1 or later, applies bulk suppressions in the editor |
-
-It also prints the install command for any missing peer dependency (`typescript`, `eslint`, `typescript-eslint`). Running it again changes nothing.
-
-- `--dry-run` previews the changes without writing.
-- `--force` overwrites an existing ESLint config.
-- `npx @wingravity/typerail@0.1.0 init` runs a specific release.
-
-</details>
-
-<details>
-<summary><b>Adopting on an existing codebase</b></summary>
-
-1. Run `init`.
-2. Run `npx eslint . --suppress-all` and commit `eslint-suppressions.json`. New code must be clean; shrink the file as you fix code with `npx eslint . --prune-suppressions`.
-3. Run `npx typerail report` to see which findings to fix first.
-4. Fix the TypeScript errors. Bulk suppressions only cover ESLint. Most fixes are mechanical: handle the `undefined` from index access, and leave optional properties out instead of passing `undefined`.
-
-`init` sets `"eslint.options": { "applySuppressions": true }` in `.vscode/settings.json` so the VS Code ESLint extension hides suppressed findings the same way CI does.
-
-</details>
-
-<details>
-<summary><b>Manual setup</b></summary>
-
-```sh
-npm install -D @wingravity/typerail typescript eslint typescript-eslint
-```
-
-```jsonc
-// tsconfig.json
-{
-  "extends": ["<your framework or base config>", "@wingravity/typerail/tsconfig.json"],
-  "compilerOptions": { /* module, target, jsx... as before */ }
-}
-```
-
-```js
-// eslint.config.js
-import typerail from "@wingravity/typerail/eslint";
-
-export default [
-  { ignores: ["dist/**"] },
-  // ...your existing configuration
-  ...typerail({ tsconfigRootDir: import.meta.dirname }),
-];
-```
-
-```jsonc
-// package.json
-"scripts": { "check": "tsc --noEmit && eslint ." }
-```
-
-</details>
-
-<details>
-<summary><b>Continuous integration</b></summary>
-
-`npm run check` exits with a non-zero code on any finding. For GitHub Actions, add `.github/workflows/check.yml`:
+For GitHub Actions, add `.github/workflows/typerail.yml`:
 
 ```yaml
-name: Check
+name: typerail
 
 on:
   pull_request:
@@ -179,17 +123,23 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run check
+      - run: npx typerail check
 ```
 
-To block merging on failures, mark the **Check** job as required in the branch protection rules. For pnpm, Yarn or Bun, replace the install and run commands.
+To block merging on findings, mark the job as required in the branch protection rules. For pnpm, Yarn or Bun, replace the install command.
 
-</details>
+## Editor integration
+
+`typerail check` needs no editor setup. To see typerail's findings as you type, add its ESLint preset and tsconfig to the project; [docs/configuration.md](docs/configuration.md#editor-integration) shows how. The CLI does not depend on them.
+
+## Requirements
+
+Node 20.3 or later and a `tsconfig.json`. typerail brings ESLint, typescript-eslint and TypeScript as dependencies, and npm reuses the project's own copies when their versions fit: TypeScript 5.8 to 6.0, ESLint 9.35 or later, typescript-eslint 8.30 or later.
 
 ## Reference
 
 - [docs/gaps](docs/gaps/README.md): every gap code, with an example and a fix.
-- [docs/configuration.md](docs/configuration.md): which flag or rule reports each code, the options, and the rules relaxed in test files.
+- [docs/configuration.md](docs/configuration.md): which flag or rule reports each code, the rules relaxed in test files, and the optional ESLint preset.
 
 Found code that TypeScript accepts and that fails at runtime, and typerail does not report it? [Open a missing check issue](https://github.com/wingravity/typerail/issues/new?template=missing-check.yml).
 

@@ -9,14 +9,14 @@ import { applyInit, installCommand, planInit, type InitReport } from "./init.ts"
 const USAGE = `Usage: typerail <command> [options]
 
 Commands:
-  init        Set up typerail in the current project
+  check       Check the project and fail on findings that are not in the baseline
   report      Write a prioritized report of all findings
+  init        Add typerail to the current project
 
 Options for init:
   --dry-run   Show what would change without writing anything
-  --force     Overwrite an existing ESLint config
 
-Run "typerail report --help" for report options.
+Run "typerail check --help" or "typerail report --help" for their options.
   -h, --help  Show this help`;
 
 const FALLBACK_SPEC = "latest";
@@ -42,8 +42,8 @@ function printReport(report: InitReport, dryRun: boolean): void {
   for (const note of report.notes) {
     console.log(`\n${note}`);
   }
-  console.log(`\nNext: ${installCommand(report.packageManager, report.missingPeers)}`);
-  console.log(`Then: ${report.packageManager} run check`);
+  console.log(`\nNext: ${installCommand(report.packageManager)}`);
+  console.log(`Then: ${report.packageManager} run typerail`);
 }
 
 async function init(args: readonly string[]): Promise<number> {
@@ -51,7 +51,6 @@ async function init(args: readonly string[]): Promise<number> {
     args: [...args],
     options: {
       "dry-run": { type: "boolean", default: false },
-      force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
     strict: false,
@@ -62,7 +61,7 @@ async function init(args: readonly string[]): Promise<number> {
   }
   const dryRun = parsed.values["dry-run"] === true;
   const cwd = process.cwd();
-  const report = await planInit({ cwd, packageSpec: await packageSpec(), dryRun, force: parsed.values.force === true });
+  const report = await planInit({ cwd, packageSpec: await packageSpec(), dryRun });
   if (!report.ok) {
     console.error(`typerail init: ${report.error}`);
     return 1;
@@ -83,6 +82,10 @@ async function main(argv: readonly string[]): Promise<number> {
   switch (command) {
     case "init":
       return init(rest);
+    case "check": {
+      const { runCheck } = await import("./check.ts");
+      return runCheck(rest);
+    }
     case "report": {
       const { runReport } = await import("./report/command.ts");
       return runReport(rest);

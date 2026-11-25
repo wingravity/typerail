@@ -1,3 +1,4 @@
+import type { CompatiblePlugin } from "typescript-eslint";
 import { noDefiniteAssignment } from "./rules/no-definite-assignment.ts";
 import { noMethodBivariance } from "./rules/no-method-bivariance.ts";
 import { noMutableArrayWidening } from "./rules/no-mutable-array-widening.ts";
@@ -22,3 +23,5 @@ export const plugin = {
     "no-structured-clone-instance": noStructuredCloneInstance,
   },
 };
+
+export const compatiblePlugin: CompatiblePlugin = plugin;

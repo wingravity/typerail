@@ -79,7 +79,7 @@ A rejection is not handled, which stops a Node process.
 
 ## Compiler flags
 
-Checks that `strict` leaves out. Each code applies when the project turns the flag off.
+Checks that `strict` leaves out. `typerail check` always compiles with these flags on, whatever the project's tsconfig says, and the compiler errors they produce carry the code.
 
 | Code | Gap | Priority | Checked by |
 |---|---|---|---|

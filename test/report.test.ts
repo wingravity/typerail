@@ -1,32 +1,22 @@
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-import type { Linter } from "eslint";
-import { typerail } from "../src/eslint/index.ts";
+import { typerailRules } from "../src/eslint/index.ts";
 import { classifyEslint, classifyTypeScript, isClassifiedRule } from "../src/cli/report/classify.ts";
-import { buildReport, expectedRuleSeverities, type Report } from "../src/cli/report/collect.ts";
+import { buildReport, type Report } from "../src/cli/report/collect.ts";
 import { renderJson, renderMarkdown, renderNext } from "../src/cli/report/render.ts";
 
 const fixtureDir = resolve(import.meta.dirname, "fixtures/project");
 
-function config(extra: Linter.Config[] = []): Linter.Config[] {
-  const base = typerail({ tsconfigRootDir: fixtureDir }) as unknown as Linter.Config[];
-  return [...base, ...extra];
-}
-
-async function report(extra: Linter.Config[] = [], tsconfig?: string): Promise<Report> {
-  const built = await buildReport({
-    cwd: fixtureDir,
-    tsconfig,
-    eslintOptions: { overrideConfigFile: true, overrideConfig: config(extra) },
-  });
+async function report(tsconfig?: string): Promise<Report> {
+  const built = await buildReport({ cwd: fixtureDir, tsconfig });
   assert.ok(built.ok, built.ok ? "" : built.error);
   return built.value;
 }
 
 describe("classification", () => {
   it("gives every rule typerail enables a priority", () => {
-    const enabled = [...expectedRuleSeverities()].filter(([, severity]) => severity === 2).map(([rule]) => rule);
+    const enabled = Object.keys(typerailRules());
     assert.ok(enabled.length > 10);
     assert.deepEqual(enabled.filter((rule) => !isClassifiedRule(rule)), []);
   });
@@ -61,8 +51,17 @@ describe("buildReport", () => {
     assert.equal(find("correctness.ts", "@typescript-eslint/no-floating-promises")?.priority, 0);
     assert.equal(find("correctness.ts", "typerail/no-mutable-array-widening")?.priority, 1);
     assert.equal(find("correctness.ts", "@typescript-eslint/unbound-method")?.priority, 2);
-    assert.equal(find("lying.ts", "inline-disable")?.priority, 4);
     assert.ok(full.findings.every((f) => f.fix.length > 0 && f.why.length > 0));
+  });
+
+  it("ignores eslint-disable comments", () => {
+    assert.ok(full.findings.some((f) => f.file === "lying.ts" && f.line === 11 && f.rule === "@typescript-eslint/no-explicit-any"));
+    assert.ok(!full.findings.some((f) => f.rule === "inline-disable"));
+  });
+
+  it("applies typerail's compiler flags even when the project's tsconfig turns them off", async () => {
+    const weakened = await report("tsconfig.weak.json");
+    assert.ok(weakened.findings.some((f) => f.file === "compiler.ts" && f.rule === "TS2322"));
   });
 
   it("reports nothing for style choices such as throw, loops and loose equality", () => {
@@ -78,39 +77,9 @@ describe("buildReport", () => {
     assert.deepEqual(production, [...production].sort((a, b) => a - b));
   });
 
-  it("reports no configuration changes for the typerail defaults", () => {
-    assert.deepEqual(full.configChanges, []);
-  });
-
-  it("reports rules and compiler flags the project weakens", async () => {
-    const weakened = await report(
-      [{ files: ["**/*.ts"], rules: { "@typescript-eslint/no-explicit-any": "off", "@typescript-eslint/no-floating-promises": "warn" } }],
-      "tsconfig.weak.json",
-    );
-    assert.deepEqual(
-      weakened.configChanges.map((c) => `${c.setting}=${c.actual}`).sort(),
-      [
-        "@typescript-eslint/no-explicit-any=off",
-        "@typescript-eslint/no-floating-promises=warn",
-        "tsconfig: noUncheckedIndexedAccess=false",
-      ],
-    );
-    assert.ok(!weakened.findings.some((f) => f.rule === "@typescript-eslint/no-explicit-any"));
-  });
-
-  it("can leave out suppressed findings", async () => {
-    const built = await buildReport({
-      cwd: fixtureDir,
-      respectSuppressions: true,
-      eslintOptions: { overrideConfigFile: true, overrideConfig: config() },
-    });
-    assert.ok(built.ok, built.ok ? "" : built.error);
-    assert.equal(built.value.findings.length, full.findings.length);
-  });
-
-  it("returns an error instead of throwing when ESLint cannot start", async () => {
-    const built = await buildReport({ cwd: fixtureDir, eslintOptions: { overrideConfigFile: 42 as unknown as string } });
-    assert.ok(!built.ok && built.error.startsWith("ESLint could not start"));
+  it("returns an error for a missing tsconfig", async () => {
+    const built = await buildReport({ cwd: fixtureDir, tsconfig: "missing.json" });
+    assert.ok(!built.ok);
   });
 
   it("renders Markdown, JSON and the next-findings list", () => {

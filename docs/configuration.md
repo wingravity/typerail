@@ -1,10 +1,10 @@
 # Configuration
 
-typerail is two presets: a tsconfig with the compiler flags that close gaps, and an ESLint configuration with the rules that report the rest. Each flag and rule maps to a gap code. The [gap catalog](gaps/README.md) explains every code.
+`typerail check` compiles the project with a set of compiler flags and runs a set of ESLint rules, both owned by typerail. Each flag and rule maps to a gap code. The [gap catalog](gaps/README.md) explains every code. The same flags and rules are available as a tsconfig and an ESLint preset for [editor integration](#editor-integration).
 
 ## Compiler flags
 
-`@wingravity/typerail/tsconfig.json` sets only these flags. It does not set `module`, `target`, `jsx`, `lib` or `types`.
+`typerail check` adds these flags to the project's own compiler options for its analysis. The project's `module`, `target`, `paths`, `lib` and `types` are kept. A flag the project turns off is still on for typerail.
 
 | Flag | Code |
 |---|---|
@@ -15,8 +15,6 @@ typerail is two presets: a tsconfig with the compiler flags that close gaps, and
 | `noFallthroughCasesInSwitch` | [TR605](gaps/TR605.md) |
 | `noUncheckedSideEffectImports` | [TR606](gaps/TR606.md) |
 | `forceConsistentCasingInFileNames` | [TR607](gaps/TR607.md) |
-
-A project's own `compilerOptions` override inherited ones. `typerail report` lists every flag the project turns off.
 
 ## ESLint rules
 
@@ -47,13 +45,37 @@ A project's own `compilerOptions` override inherited ones. `typerail report` lis
 
 The two rules marked with a typescript-eslint version are enabled only when the installed version has them.
 
-`// eslint-disable` comments have no effect ([TR002](gaps/TR002.md)), so a finding cannot be hidden in the source. A deliberate exception belongs in `eslint.config.js`, where `typerail report` lists it.
+`typerail check` runs its own ESLint instance. The project's ESLint configuration and `// eslint-disable` comments do not affect it.
 
 ## Tests
 
 In files matching the `tests` option, these rules are off, because mocks and fixtures often need them: type assertions, non-null assertions, definite assignment assertions, type predicates, return-only type arguments and the `no-unsafe-*` rules. The variance rules and the promise rules stay on: an assertion that is not awaited passes silently.
 
-## Options
+## Editor integration
+
+`typerail check` is the source of truth and needs no setup. To see the same findings in the editor, add the tsconfig and the ESLint preset to the project. The project then needs `eslint` and `typescript-eslint` as dev dependencies, and the VS Code ESLint extension.
+
+```jsonc
+// tsconfig.json
+{
+  "extends": ["<your framework or base config>", "@wingravity/typerail/tsconfig.json"],
+  "compilerOptions": { /* module, target, jsx... as before */ }
+}
+```
+
+```js
+// eslint.config.js
+import typerail from "@wingravity/typerail/eslint";
+
+export default [
+  // ...your existing configuration
+  ...typerail({ tsconfigRootDir: import.meta.dirname }),
+];
+```
+
+With the preset, `// eslint-disable` comments for typerail's rules have no effect and are reported as [TR002](gaps/TR002.md).
+
+### Preset options
 
 ```js
 typerail({
@@ -67,6 +89,7 @@ typerail({
 | Option | Purpose |
 |---|---|
 | `tsconfigRootDir` | the directory of the tsconfig used for type information |
-| `tests` | test files, where the rules listed above are off |
+| `project` | a tsconfig path to use instead of finding the nearest one |
+| `tests` | test files, where the rules listed under Tests are off |
 | `files` | files the rules apply to |
 | `allowInlineDisable` | `true` makes `// eslint-disable` comments work again |

@@ -7,6 +7,7 @@ export interface TyperailOptions {
   readonly tests?: readonly string[] | undefined;
   readonly allowInlineDisable?: boolean | undefined;
   readonly tsconfigRootDir?: string | undefined;
+  readonly project?: string | undefined;
 }
 
 export const DEFAULT_FILES = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
@@ -76,7 +77,7 @@ export const RUNTIME_HOLE_RULES: FlatConfig.Rules = {
   "typerail/no-structured-clone-instance": "error",
 };
 
-const RELAXED_IN_TESTS = [
+export const RELAXED_IN_TESTS = [
   "@typescript-eslint/consistent-type-assertions",
   "@typescript-eslint/no-non-null-assertion",
   "typerail/no-definite-assignment",
@@ -84,6 +85,17 @@ const RELAXED_IN_TESTS = [
   "typerail/no-return-type-argument",
   ...Object.keys(UNSAFE_ANY_RULES),
 ];
+
+export function typerailRules(): FlatConfig.Rules {
+  return {
+    ...ESCAPE_HATCH_RULES,
+    ...CLAIM_RULES,
+    ...UNSAFE_ANY_RULES,
+    ...VARIANCE_RULES,
+    ...RUNTIME_HOLE_RULES,
+    ...availableNewerRules(),
+  };
+}
 
 export function typerail(options: TyperailOptions = {}): FlatConfig.Config[] {
   const files: (string | string[])[] = [...(options.files ?? DEFAULT_FILES)];
@@ -104,18 +116,11 @@ export function typerail(options: TyperailOptions = {}): FlatConfig.Config[] {
       plugins: { typerail: plugin },
       languageOptions: {
         parserOptions: {
-          projectService: true,
+          ...(options.project === undefined ? { projectService: true } : { project: options.project }),
           ...(options.tsconfigRootDir === undefined ? {} : { tsconfigRootDir: options.tsconfigRootDir }),
         },
       },
-      rules: {
-        ...ESCAPE_HATCH_RULES,
-        ...CLAIM_RULES,
-        ...UNSAFE_ANY_RULES,
-        ...VARIANCE_RULES,
-        ...RUNTIME_HOLE_RULES,
-        ...availableNewerRules(),
-      },
+      rules: typerailRules(),
     },
     {
       name: "typerail/tests",

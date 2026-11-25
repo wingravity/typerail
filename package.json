@@ -1,7 +1,7 @@
 {
   "name": "@wingravity/typerail",
-  "version": "0.1.0",
-  "description": "Reports TypeScript code that type-checks and still fails at runtime, with checks that coding agents cannot switch off.",
+  "version": "0.2.0",
+  "description": "Finds TypeScript code that type-checks and still fails at runtime. One command, no configuration, and coding agents cannot switch it off.",
   "license": "MIT",
   "author": "Daniel Berigoi",
   "type": "module",
@@ -40,24 +40,20 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
     "lint": "eslint .",
-    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
+    "typerail": "node src/cli/main.ts check",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run typerail && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
     "@typescript-eslint/rule-tester": "8.73.0",
-    "@typescript-eslint/utils": "8.73.0",
-    "eslint": "10.15.0",
-    "typescript": "6.0.3",
-    "typescript-eslint": "8.73.0"
+    "@typescript-eslint/utils": "8.73.0"
   },
-  "peerDependencies": {
+  "dependencies": {
+    "@typescript-eslint/type-utils": "^8.30.0",
+    "@typescript-eslint/types": "^8.30.0",
     "eslint": "^9.35.0 || ^10.0.0",
     "typescript": ">=5.8.0 <6.1.0",
     "typescript-eslint": "^8.30.0"
-  },
-  "dependencies": {
-    "@typescript-eslint/types": "^8.30.0",
-    "@typescript-eslint/type-utils": "^8.30.0"
   },
   "keywords": [
     "typescript",

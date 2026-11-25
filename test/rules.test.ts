@@ -12,9 +12,15 @@ import { noTupleMutation } from "../src/eslint/rules/no-tuple-mutation.ts";
 import { noTypePredicate } from "../src/eslint/rules/no-type-predicate.ts";
 
 RuleTester.afterAll = after;
-RuleTester.describe = describe;
-RuleTester.it = it;
-RuleTester.itOnly = it.only;
+RuleTester.describe = (text, method) => {
+  void describe(text, method);
+};
+RuleTester.it = (text, method) => {
+  void it(text, method);
+};
+RuleTester.itOnly = (text, method) => {
+  void it.only(text, method);
+};
 
 const typed = new RuleTester({
   languageOptions: {

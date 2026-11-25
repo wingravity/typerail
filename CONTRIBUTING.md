@@ -6,6 +6,7 @@
 npm install
 npm run typecheck
 npm run lint
+npm run typerail
 npm test
 npm run build
 ```

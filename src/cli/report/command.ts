@@ -6,14 +6,13 @@ import { renderJson, renderMarkdown, renderNext, summarize } from "./render.ts";
 
 export const REPORT_USAGE = `Usage: typerail report [options]
 
-Runs the TypeScript compiler and ESLint and groups every finding by priority.
+Checks the project like \`typerail check\` and groups every finding by priority, including findings recorded in the baseline.
 
 Options:
   --format md|json         Output format (default: md)
   --out <file>             Output file (default: typerail-report.md for md, standard output for json)
   --next <n>               Print only the first n findings, highest priority first, to standard output
-  --project <tsconfig>     tsconfig to type-check (default: tsconfig.json)
-  --respect-suppressions   Leave out findings recorded in eslint-suppressions.json
+  --project <tsconfig>     tsconfig that defines the files to check (default: tsconfig.json)
   -h, --help               Show this help`;
 
 const DEFAULT_MARKDOWN_FILE = "typerail-report.md";
@@ -26,7 +25,6 @@ export async function runReport(args: readonly string[]): Promise<number> {
       out: { type: "string" },
       next: { type: "string" },
       project: { type: "string", default: "tsconfig.json" },
-      "respect-suppressions": { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
     strict: false,
@@ -51,7 +49,6 @@ export async function runReport(args: readonly string[]): Promise<number> {
   const report = await buildReport({
     cwd,
     tsconfig: typeof values.project === "string" ? values.project : undefined,
-    respectSuppressions: values["respect-suppressions"] === true,
   });
   if (!report.ok) {
     console.error(`typerail report: ${report.error}`);
@@ -97,8 +94,5 @@ export async function runReport(args: readonly string[]): Promise<number> {
   console.log(`typerail report: wrote ${file}`);
   console.log(`  production: ${counts(summary.production)}`);
   console.log(`  tests:      ${counts(summary.tests)}`);
-  if (report.value.configChanges.length > 0) {
-    console.log(`  configuration weakens typerail in ${String(report.value.configChanges.length)} places (see the report)`);
-  }
   return 0;
 }

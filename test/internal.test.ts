@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { attempt, attemptAsync, err, ok } from "../src/internal/result.ts";
-import { ensureDir, readTextFile, writeTextFile } from "../src/internal/fs.ts";
+import { readTextFile, writeTextFile } from "../src/internal/fs.ts";
 import { jsonNestingDepth, safeJsonParse, safeJsonStringify } from "../src/internal/json.ts";
 
 let dir = "";
@@ -87,12 +87,6 @@ describe("fs wrappers", () => {
   it("reports writes into missing directories", async () => {
     const r = await writeTextFile(join(dir, "nope", "x.txt"), "x");
     assert.ok(!r.ok && r.error.code === "ENOENT");
-  });
-
-  it("creates directories", async () => {
-    const path = join(dir, "a", "b");
-    assert.deepEqual(await ensureDir(path), { ok: true, value: undefined });
-    assert.deepEqual(await writeTextFile(join(path, "x.txt"), "x"), { ok: true, value: undefined });
   });
 });
 

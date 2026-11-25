@@ -11,10 +11,11 @@ typerail reports code that TypeScript accepts but that can fail at runtime. A ru
 ```sh
 npm run typecheck
 npm run lint
+npm run typerail
 npm test
 ```
 
-All three must pass. `eslint.config.js` applies the typerail preset to `src/`, plus stricter rules for this repository only:
+All four must pass. `npm run typerail` runs this repository's own `typerail check`. `eslint.config.js` applies the typerail preset to `src/`, plus stricter rules for this repository only. `typerail check` is the product; the preset exists for editor integration and for linting this repository.
 
 - Functions that can fail return a `Result` from `src/internal/result.ts`. Do not throw. Only `src/internal/` may call throwing APIs. This is the style of this repository, not something typerail enforces on its users.
 - No `as` (except `as const`), `!`, `any` or `@ts-` comments.

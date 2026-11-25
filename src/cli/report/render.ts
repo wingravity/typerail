@@ -96,19 +96,6 @@ export function renderMarkdown(report: Report, projectName: string): string {
   }
   lines.push("");
 
-  if (report.configChanges.length > 0) {
-    lines.push(
-      "## Configuration changes",
-      "",
-      "The project configuration weakens typerail in these places. Code they would report is not in this report.",
-      "",
-      "| Code | Setting | typerail | Project |",
-      "|---|---|---|---|",
-      ...report.configChanges.map((c) => `| ${c.code ?? ""} | \`${c.setting}\` | ${c.expected} | ${c.actual} |`),
-      "",
-    );
-  }
-
   const urgent = production.filter((f) => f.priority <= 2);
   if (urgent.length > 0) {
     lines.push(
@@ -153,7 +140,6 @@ export function renderJson(report: Report, limit?: number): Result<string, strin
       generatedAt: report.generatedAt,
       project: report.project,
       summary: summarize(report.findings),
-      configChanges: report.configChanges,
       findings,
     },
     2,
@@ -161,29 +147,32 @@ export function renderJson(report: Report, limit?: number): Result<string, strin
   return json.ok ? ok(`${json.value}\n`) : err(json.error.message);
 }
 
-export function renderNext(report: Report, limit: number): string {
-  const summary = summarize(report.findings);
-  const counts = PRIORITIES.map(
+export function renderFindings(findings: readonly Finding[]): string[] {
+  return findings.flatMap((f, index) => [
+    `${String(index + 1)}. [P${String(f.priority)}]${f.code === undefined ? "" : ` ${f.code}`} ${location(f)} ${f.rule}${f.test ? " (test)" : ""}`,
+    `   ${oneLine(f.message)}`,
+    `   Fix: ${f.fix}`,
+    ...(f.code === undefined ? [] : [`   Docs: ${docsUrl(f.code)}`]),
+  ]);
+}
+
+export function findingsCount(count: number): string {
+  return `${String(count)} ${count === 1 ? "finding" : "findings"}`;
+}
+
+export function countsByPriority(findings: readonly Finding[]): string {
+  const summary = summarize(findings);
+  return PRIORITIES.map(
     (p) => `P${String(p)} ${String((summary.production[`P${String(p)}`] ?? 0) + (summary.tests[`P${String(p)}`] ?? 0))}`,
   ).join(", ");
+}
+
+export function renderNext(report: Report, limit: number): string {
   const shown = report.findings.slice(0, limit);
   const lines = [
-    `typerail: ${String(report.findings.length)} findings (${counts}). Showing the first ${String(shown.length)}, highest priority first.`,
+    `typerail: ${findingsCount(report.findings.length)} (${countsByPriority(report.findings)}). Showing the first ${String(shown.length)}, highest priority first.`,
     "",
+    ...renderFindings(shown),
   ];
-  if (report.configChanges.length > 0) {
-    lines.push(
-      `Configuration weakens typerail: ${report.configChanges.map((c) => `${c.setting} is ${c.actual}${c.code === undefined ? "" : ` (${c.code})`}`).join("; ")}.`,
-      "",
-    );
-  }
-  shown.forEach((f, index) => {
-    lines.push(
-      `${String(index + 1)}. [P${String(f.priority)}]${f.code === undefined ? "" : ` ${f.code}`} ${location(f)} ${f.rule}${f.test ? " (test)" : ""}`,
-      `   ${oneLine(f.message)}`,
-      `   Fix: ${f.fix}`,
-      ...(f.code === undefined ? [] : [`   Docs: ${docsUrl(f.code)}`]),
-    );
-  });
   return `${lines.join("\n")}\n`;
 }

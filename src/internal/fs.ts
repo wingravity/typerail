@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { attemptAsync, err, type AsyncResult } from "./result.ts";
 import { describeCause, type TaggedError } from "./error.ts";
 
@@ -48,10 +48,4 @@ export async function readTextFile(
 
 export function writeTextFile(path: string, content: string): AsyncResult<void, FsError> {
   return attemptAsync(() => writeFile(path, content, "utf8"), toFsError(path));
-}
-
-export function ensureDir(path: string): AsyncResult<void, FsError> {
-  return attemptAsync(async () => {
-    await mkdir(path, { recursive: true });
-  }, toFsError(path));
 }
