@@ -25,7 +25,7 @@ npx @wingravity/typerail check
 
 typerail does not check style. Throwing or returning errors, loop forms, equality operators and truthiness checks are left to the project's own tools.
 
-<p align="center"><img src=".github/assets/report.png" alt="Output of npx typerail report --next 4: findings grouped from P0 to P4, each with a file location, the rule and a fix instruction" width="820"></p>
+<p align="center"><img src=".github/assets/check.png" alt="Output of npx typerail check: four findings, each with its priority, gap code, file location, rule, explanation and a link to its documentation" width="820"></p>
 
 ## Gap codes
 

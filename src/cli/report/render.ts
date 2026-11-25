@@ -147,13 +147,21 @@ export function renderJson(report: Report, limit?: number): Result<string, strin
   return json.ok ? ok(`${json.value}\n`) : err(json.error.message);
 }
 
+function ownMessage(finding: Finding): string | undefined {
+  const prefix = finding.code === undefined ? undefined : `[${finding.code}] `;
+  return prefix !== undefined && finding.message.startsWith(prefix) ? finding.message.slice(prefix.length) : undefined;
+}
+
 export function renderFindings(findings: readonly Finding[]): string[] {
-  return findings.flatMap((f, index) => [
-    `${String(index + 1)}. [P${String(f.priority)}]${f.code === undefined ? "" : ` ${f.code}`} ${location(f)} ${f.rule}${f.test ? " (test)" : ""}`,
-    `   ${oneLine(f.message)}`,
-    `   Fix: ${f.fix}`,
-    ...(f.code === undefined ? [] : [`   Docs: ${docsUrl(f.code)}`]),
-  ]);
+  return findings.flatMap((f, index) => {
+    const own = ownMessage(f);
+    return [
+      `${String(index + 1)}. [P${String(f.priority)}]${f.code === undefined ? "" : ` ${f.code}`} ${location(f)} ${f.rule}${f.test ? " (test)" : ""}`,
+      `   ${oneLine(own ?? f.message)}`,
+      ...(own === undefined ? [`   Fix: ${f.fix}`] : []),
+      ...(f.code === undefined ? [] : [`   Docs: ${docsUrl(f.code)}`]),
+    ];
+  });
 }
 
 export function findingsCount(count: number): string {
