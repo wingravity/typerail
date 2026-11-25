@@ -67,6 +67,7 @@ interface TypeScriptResult {
   readonly files: string[];
   readonly configs: string[];
   readonly browserFiles: Set<string>;
+  readonly programs: Map<string, ts.Program>;
 }
 
 function isBrowserConfig(parsed: ts.ParsedCommandLine): boolean {
@@ -166,8 +167,12 @@ function collectTypeScript(cwd: string, configPath: string, flags: ts.CompilerOp
   const findings = new Map<string, Finding>();
   const files = new Set<string>();
   const browserFiles = new Set<string>();
+  const programs = new Map<string, ts.Program>();
   for (const { path, parsed } of configs.value) {
     const program = ts.createProgram({ rootNames: parsed.fileNames, options: compilerOptions(parsed, flags), projectReferences: [] });
+    for (const file of parsed.fileNames) {
+      programs.set(relative(cwd, file), program);
+    }
     const browserConfig = isBrowserConfig(parsed);
     for (const file of parsed.fileNames) {
       const source = program.getSourceFile(file);
@@ -193,6 +198,7 @@ function collectTypeScript(cwd: string, configPath: string, flags: ts.CompilerOp
     files: [...files],
     configs: configs.value.map((config) => config.path),
     browserFiles,
+    programs,
   });
 }
 
@@ -318,6 +324,38 @@ async function dependencyCheck(cwd: string): AsyncResult<string[], string> {
   return ok([`${String(missing.length)} declared dependencies are not installed (${listed}). Findings that depend on their types may be wrong.`]);
 }
 
+const BOUND_INTL_METHODS: Readonly<Record<string, string>> = { DateTimeFormat: "format", NumberFormat: "format", Collator: "compare" };
+
+function findPropertyAccess(node: ts.Node, position: number): ts.PropertyAccessExpression | undefined {
+  if (position < node.getFullStart() || position >= node.getEnd()) {
+    return undefined;
+  }
+  if (ts.isPropertyAccessExpression(node) && node.getStart() === position) {
+    return node;
+  }
+  return ts.forEachChild(node, (child) => findPropertyAccess(child, position));
+}
+
+function isBoundIntlMethod(finding: Finding, cwd: string, programs: ReadonlyMap<string, ts.Program>): boolean {
+  const program = programs.get(finding.file);
+  const source = program?.getSourceFile(resolve(cwd, finding.file));
+  if (program === undefined || source === undefined) {
+    return false;
+  }
+  const position = source.getPositionOfLineAndCharacter(finding.line - 1, finding.column - 1);
+  const access = findPropertyAccess(source, position);
+  if (access === undefined) {
+    return false;
+  }
+  const symbol = program.getTypeChecker().getTypeAtLocation(access.expression).getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  return (
+    symbol !== undefined &&
+    BOUND_INTL_METHODS[symbol.getName()] === access.name.text &&
+    declarations.some((declaration) => program.isSourceFileDefaultLibrary(declaration.getSourceFile()))
+  );
+}
+
 const PROCESS_CRASHES = new Set(["TR501", "TR502"]);
 
 function inBrowser(finding: Finding, browserFiles: ReadonlySet<string>): Finding {
@@ -354,6 +392,7 @@ export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, 
     generatedAt: new Date().toISOString(),
     project: cwd,
     findings: [...typescript.value.findings, ...eslint.value]
+      .filter((found) => found.rule !== "@typescript-eslint/unbound-method" || !isBoundIntlMethod(found, cwd, typescript.value.programs))
       .map((found) => inBrowser(found, typescript.value.browserFiles))
       .sort(compareFindings),
     warnings: dependencies.value,

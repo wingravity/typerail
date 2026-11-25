@@ -285,4 +285,25 @@ describe("typerail binary", () => {
     await write("node_modules/vite/package.json", `{ "name": "vite", "types": "client.d.ts" }`);
     assert.deepEqual(await priorities(), { "server.ts": 1, "client.ts": 1 });
   });
+
+  it("does not report detached Intl formatters, which the specification binds", async () => {
+    await write("tsconfig.json", `{ "compilerOptions": { "strict": true, "target": "ES2022", "module": "NodeNext", "types": [] }, "include": ["*.ts"] }`);
+    await write(
+      "index.ts",
+      [
+        'export const format = new Intl.NumberFormat("en-US").format;',
+        "class Counter {",
+        "  count = 0;",
+        "  increment(): number {",
+        "    return ++this.count;",
+        "  }",
+        "}",
+        "export const increment = new Counter().increment;",
+        "",
+      ].join("\n"),
+    );
+    const run = spawnSync(process.execPath, [main, "check"], { cwd: dir, encoding: "utf8" });
+    assert.ok(!run.stdout.includes("index.ts:1:"), run.stdout);
+    assert.ok(run.stdout.includes("TR403 index.ts:8:"), run.stdout);
+  });
 });
