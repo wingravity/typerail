@@ -1,7 +1,7 @@
 import type { TSESLint } from "@typescript-eslint/utils";
 import ts from "typescript";
 import { docsUrl } from "../../gaps.ts";
-import { isArrayLike, isFromDefaultLibrary, isObjectType, typedContext, wideningListeners } from "./slots.ts";
+import { isArrayLike, isFromDefaultLibrary, isFromExternalLibrary, isObjectType, typedContext, wideningListeners } from "./slots.ts";
 
 type MessageId = "bivariant";
 
@@ -25,12 +25,18 @@ function isMethod(symbol: ts.Symbol): boolean {
   return declarations.length > 0 && declarations.every((d) => ts.isMethodSignature(d) || ts.isMethodDeclaration(d));
 }
 
-function checkedMethods(program: ts.Program, checker: ts.TypeChecker, type: ts.Type): ts.Symbol[] {
+function checkedMethods(program: ts.Program, checker: ts.TypeChecker, type: ts.Type, fresh: boolean): ts.Symbol[] {
   const symbol = type.getSymbol();
-  const writers = isFromDefaultLibrary(program, symbol) ? (LIBRARY_WRITERS[symbol?.getName() ?? ""] ?? []) : [];
+  const writers = !fresh && isFromDefaultLibrary(program, symbol) ? (LIBRARY_WRITERS[symbol?.getName() ?? ""] ?? []) : [];
   return checker
     .getPropertiesOfType(type)
-    .filter((property) => writers.includes(property.getName()) || (isMethod(property) && !isFromDefaultLibrary(program, property)));
+    .filter(
+      (property) =>
+        writers.includes(property.getName()) ||
+        (isMethod(property) &&
+          !isFromDefaultLibrary(program, property) &&
+          !(property.getDeclarations() ?? []).some((declaration) => isFromExternalLibrary(program, declaration))),
+    );
 }
 
 function parameterTypes(checker: ts.TypeChecker, signature: ts.Signature): ts.Type[] {
@@ -41,6 +47,9 @@ function narrowerParameter(checker: ts.TypeChecker, source: ts.Type, target: ts.
   const sourceSignature = source.getCallSignatures()[0];
   const targetSignature = target.getCallSignatures()[0];
   if (sourceSignature === undefined || targetSignature === undefined) {
+    return undefined;
+  }
+  if (sourceSignature.getTypeParameters() !== undefined || targetSignature.getTypeParameters() !== undefined) {
     return undefined;
   }
   const sourceParameters = parameterTypes(checker, sourceSignature);
@@ -63,13 +72,14 @@ export function findBivariantMethod(
   checker: ts.TypeChecker,
   source: ts.Type,
   target: ts.Type,
+  fresh: boolean,
   depth = 0,
   prefix = "",
 ): Finding | undefined {
   if (depth > MAX_DEPTH || source === target) {
     return undefined;
   }
-  for (const method of checkedMethods(program, checker, target)) {
+  for (const method of checkedMethods(program, checker, target, fresh)) {
     const sourceMethod = checker.getPropertyOfType(source, method.getName());
     if (sourceMethod === undefined) {
       continue;
@@ -90,7 +100,7 @@ export function findBivariantMethod(
     const sourceType = checker.getNonNullableType(checker.getTypeOfSymbol(sourceProperty));
     const targetType = checker.getNonNullableType(checker.getTypeOfSymbol(property));
     if (sourceType !== targetType && isPlainObject(checker, sourceType) && isPlainObject(checker, targetType)) {
-      const nested = findBivariantMethod(program, checker, sourceType, targetType, depth + 1, `${prefix}${property.getName()}.`);
+      const nested = findBivariantMethod(program, checker, sourceType, targetType, fresh, depth + 1, `${prefix}${property.getName()}.`);
       if (nested !== undefined) {
         return nested;
       }
@@ -119,7 +129,7 @@ export const noMethodBivariance: TSESLint.RuleModule<MessageId> = {
       return {};
     }
     const { checker, program } = typed;
-    return wideningListeners(typed, ({ node, source, targets }) => {
+    return wideningListeners(typed, ({ node, source, targets, fresh }) => {
       if (!isPlainObject(checker, source)) {
         return;
       }
@@ -127,7 +137,7 @@ export const noMethodBivariance: TSESLint.RuleModule<MessageId> = {
       if (candidates.length === 0) {
         return;
       }
-      const findings = candidates.map((target) => findBivariantMethod(program, checker, source, target));
+      const findings = candidates.map((target) => findBivariantMethod(program, checker, source, target, fresh));
       const first = findings[0];
       if (first !== undefined && findings.every((finding) => finding !== undefined)) {
         context.report({

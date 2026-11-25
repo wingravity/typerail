@@ -49,6 +49,7 @@ typed.run("no-mutable-array-widening", noMutableArrayWidening, {
     `${animals} readAnimals(dogs);`,
     `${animals} export const d = first(dogs);`,
     `${animals} export const names: string[] = dogs.map((d) => d.name);`,
+    `${animals} export const anything: unknown[] = dogs;`,
   ],
   invalid: [
     { code: `${animals} export const a: Animal[] = dogs;`, errors: [{ messageId: "widened" }] },
@@ -75,6 +76,8 @@ typed.run("no-mutable-property-widening", noMutablePropertyWidening, {
     `${animals} declare const kennel: { readonly pet: Dog }; export const h: { readonly pet: Animal } = kennel;`,
     `${animals} declare const r: Readonly<{ pet: Dog }>; export const h: Readonly<{ pet: Animal }> = r;`,
     `${animals} declare const counts: { a: number }; export const c: Readonly<Record<string, number>> = counts;`,
+    `${animals} declare const holder2: { pet: Dog }; export const h: { pet: unknown } = holder2;`,
+    `${animals} declare const holder2: { pet: Dog }; export const h: Record<string, unknown> = holder2;`,
   ],
   invalid: [
     {
@@ -106,6 +109,9 @@ typed.run("no-method-bivariance", noMethodBivariance, {
     `${animals} declare const m: Map<string, Dog>; export const r: ReadonlyMap<string, Animal> = m;`,
     `${animals} declare const list: readonly Dog[]; export const r: readonly Animal[] = list;`,
     `${animals} interface Handler<T> { handle(value: T): void } export const a: Handler<Animal> = { handle(animal) { return animal; } };`,
+    `${animals} interface Emitter { on<E>(event: E, listener: () => void): this } declare const a: Emitter & { id: string }; export const b: Emitter = a;`,
+    `${animals} declare const dogMap: Map<string, Dog>; export const fresh: Map<string, Animal> = new Map(dogMap);`,
+    `${animals} export const box: { placed: Set<Animal> } = { placed: new Set([rex]) };`,
   ],
   invalid: [
     {
@@ -176,6 +182,7 @@ typed.run("no-overload-signature", noOverloadSignature, {
     `declare function external(a: string): string; declare function external(a: number): number; export const e = external;`,
     `declare module "x" { function f(a: string): string; function f(a: number): number; }`,
     `export interface Parse { (text: string): number; (text: number): string }`,
+    `declare class Base { connect(): Promise<void>; connect(cb: () => void): void; } export class Child extends Base { override connect(): Promise<void>; override connect(cb: () => void): void; override connect(cb?: () => void): Promise<void> | void { return cb === undefined ? Promise.resolve() : cb(); } }`,
   ],
   invalid: [
     {

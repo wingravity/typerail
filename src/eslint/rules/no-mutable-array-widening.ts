@@ -1,7 +1,7 @@
 import type { TSESLint } from "@typescript-eslint/utils";
 import ts from "typescript";
 import { docsUrl } from "../../gaps.ts";
-import { typedContext, wideningListeners } from "./slots.ts";
+import { isTopLike, typedContext, wideningListeners } from "./slots.ts";
 
 type MessageId = "widened";
 
@@ -19,7 +19,12 @@ export function isWidenedArray(checker: ts.TypeChecker, source: ts.Type, target:
   }
   const sourceElement = elementType(checker, source);
   const targetElement = elementType(checker, target);
-  return sourceElement !== undefined && targetElement !== undefined && !checker.isTypeAssignableTo(targetElement, sourceElement);
+  return (
+    sourceElement !== undefined &&
+    targetElement !== undefined &&
+    !isTopLike(targetElement) &&
+    !checker.isTypeAssignableTo(targetElement, sourceElement)
+  );
 }
 
 export const noMutableArrayWidening: TSESLint.RuleModule<MessageId> = {

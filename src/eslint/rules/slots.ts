@@ -38,6 +38,7 @@ export interface Widening {
   readonly node: TSESTree.Expression;
   readonly source: ts.Type;
   readonly targets: readonly ts.Type[];
+  readonly fresh: boolean;
 }
 
 export function wideningListeners(
@@ -45,10 +46,33 @@ export function wideningListeners(
   onWidening: (widening: Widening) => void,
   options: { readonly includeFresh?: boolean } = {},
 ): TSESLint.RuleListener {
-  const { checker, toTs } = typed;
+  const { checker, program, toTs } = typed;
+
+  const passedToLibrary = (slot: TSESTree.Expression): boolean => {
+    let node: TSESTree.Node = slot;
+    for (let depth = 0; depth < 20; depth++) {
+      const parent: TSESTree.Node = node.parent;
+      if ((parent.type === AST_NODE_TYPES.CallExpression || parent.type === AST_NODE_TYPES.NewExpression) && node !== parent.callee) {
+        const call = toTs(parent);
+        const signature = ts.isCallExpression(call) || ts.isNewExpression(call) ? checker.getResolvedSignature(call) : undefined;
+        return isFromExternalLibrary(program, signature?.getDeclaration());
+      }
+      if (
+        parent.type !== AST_NODE_TYPES.Property &&
+        parent.type !== AST_NODE_TYPES.ObjectExpression &&
+        parent.type !== AST_NODE_TYPES.ArrayExpression &&
+        parent.type !== AST_NODE_TYPES.ConditionalExpression &&
+        parent.type !== AST_NODE_TYPES.LogicalExpression
+      ) {
+        return false;
+      }
+      node = parent;
+    }
+    return false;
+  };
 
   const check = (slot: TSESTree.Expression | null | undefined): void => {
-    if (slot === null || slot === undefined) {
+    if (slot === null || slot === undefined || passedToLibrary(slot)) {
       return;
     }
     const tsSlot = toTs(slot);
@@ -57,10 +81,12 @@ export function wideningListeners(
       return;
     }
     const targets = contextual.isUnion() ? contextual.types : [contextual];
-    const nodes = options.includeFresh === true ? [slot] : sharedValues(slot);
+    const shared = sharedValues(slot);
+    const fresh = shared.length === 0;
+    const nodes = options.includeFresh === true && fresh ? [slot] : shared;
     for (const node of nodes) {
       const source = checker.getNonNullableType(checker.getTypeAtLocation(toTs(node)));
-      onWidening({ node, source, targets });
+      onWidening({ node, source, targets, fresh });
     }
   };
 
@@ -122,6 +148,36 @@ export function isFromLibrary(program: ts.Program, declaration: ts.Node | undefi
   }
   const file = declaration.getSourceFile();
   return program.isSourceFileDefaultLibrary(file) || program.isSourceFileFromExternalLibrary(file) || file.fileName.includes("/node_modules/");
+}
+
+export function isFromExternalLibrary(program: ts.Program, declaration: ts.Node | undefined): boolean {
+  if (declaration === undefined) {
+    return false;
+  }
+  const file = declaration.getSourceFile();
+  if (program.isSourceFileDefaultLibrary(file)) {
+    return false;
+  }
+  return program.isSourceFileFromExternalLibrary(file) || file.fileName.includes("/node_modules/");
+}
+
+export function isTopLike(type: ts.Type): boolean {
+  if ((type.getFlags() & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.NonPrimitive)) !== 0) {
+    return true;
+  }
+  return (
+    (type.getFlags() & ts.TypeFlags.Object) !== 0 &&
+    type.getProperties().length === 0 &&
+    type.getCallSignatures().length === 0 &&
+    type.getConstructSignatures().length === 0 &&
+    type.getStringIndexType() === undefined &&
+    type.getNumberIndexType() === undefined
+  );
+}
+
+export function isExternalLibraryType(program: ts.Program, type: ts.Type): boolean {
+  const symbol = type.aliasSymbol ?? type.getSymbol();
+  return (symbol?.getDeclarations() ?? []).some((declaration) => isFromExternalLibrary(program, declaration));
 }
 
 export function isFromDefaultLibrary(program: ts.Program, symbol: ts.Symbol | undefined): boolean {

@@ -28,7 +28,7 @@ export const noOverloadSignature: TSESLint.RuleModule<MessageId> = {
         }
       },
       MethodDefinition(node) {
-        if (node.value.type === AST_NODE_TYPES.TSEmptyBodyFunctionExpression && !isAmbient(node)) {
+        if (node.value.type === AST_NODE_TYPES.TSEmptyBodyFunctionExpression && !node.override && !isAmbient(node)) {
           context.report({ node, messageId: "overload" });
         }
       },

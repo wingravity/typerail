@@ -3,7 +3,7 @@ import { isPropertyReadonlyInType } from "@typescript-eslint/type-utils";
 import ts from "typescript";
 import { docsUrl } from "../../gaps.ts";
 import { isWidenedArray } from "./no-mutable-array-widening.ts";
-import { isArrayLike, isFromLibrary, isObjectType, typedContext, wideningListeners } from "./slots.ts";
+import { isArrayLike, isExternalLibraryType, isFromLibrary, isObjectType, isTopLike, typedContext, wideningListeners } from "./slots.ts";
 
 type MessageId = "widened";
 
@@ -47,6 +47,9 @@ export function findPropertyWidening(
     const sourceType = checker.getNonNullableType(checker.getTypeOfSymbol(sourceProperty));
     const targetType = checker.getNonNullableType(checker.getTypeOfSymbol(targetProperty));
     const path = `${prefix}${name}`;
+    if (isTopLike(targetType)) {
+      continue;
+    }
     const writable = !isPropertyReadonlyInType(target, targetProperty, checker);
     if (writable && !checker.isTypeAssignableTo(targetType, sourceType)) {
       return { path, sourceType, targetType };
@@ -62,7 +65,7 @@ export function findPropertyWidening(
     }
   }
   for (const index of checker.getIndexInfosOfType(target)) {
-    if (index.isReadonly || isFromLibrary(program, index.declaration)) {
+    if (index.isReadonly || isTopLike(index.type) || isFromLibrary(program, index.declaration)) {
       continue;
     }
     for (const sourceProperty of checker.getPropertiesOfType(source)) {
@@ -99,7 +102,9 @@ export const noMutablePropertyWidening: TSESLint.RuleModule<MessageId> = {
       if (!isPlainObject(checker, source)) {
         return;
       }
-      const candidates = targets.filter((target) => isPlainObject(checker, target) && checker.isTypeAssignableTo(source, target));
+      const candidates = targets.filter(
+        (target) => isPlainObject(checker, target) && !isExternalLibraryType(program, target) && checker.isTypeAssignableTo(source, target),
+      );
       if (candidates.length === 0) {
         return;
       }
