@@ -79,7 +79,7 @@ This records the current findings in `typerail-baseline.json`, counted per file 
 
 | Priority | Meaning | Examples |
 |---|---|---|
-| P0: Process can go down | can stop the whole process | floating promises, async callbacks where a void callback is expected, imports that fail on Linux |
+| P0: Process can go down | can stop the whole process | floating promises and async callbacks where a void callback is expected (P1 in browser code), imports that fail on Linux |
 | P1: Silent wrong result | wrong data or behavior with no error raised | `as`, `any`, `Dog[]` used as a mutable `Animal[]`, bivariant methods, type predicates, non-exhaustive switches |
 | P2: Request fails | throws at runtime and fails one request | possibly undefined access, `!`, `field!: T`, tuples changed by `pop`, detached methods |
 | P3: Latent risk | lets through a value that later code may mishandle | `undefined` passed for an optional property |

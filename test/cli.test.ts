@@ -254,4 +254,35 @@ describe("typerail binary", () => {
     assert.equal(run.status, 1);
     assert.ok(run.stderr.includes("dependencies are not installed"));
   });
+
+  it("lowers unhandled promises to P1 in browser code", async () => {
+    const floating = "async function save(): Promise<void> {}\nexport function run(): void {\n  save();\n}\n";
+    const priorities = async (): Promise<Record<string, number>> => {
+      const run = spawnSync(process.execPath, [main, "check", "--format", "json"], { cwd: dir, encoding: "utf8" });
+      const parsed: unknown = JSON.parse(run.stdout);
+      assert.ok(typeof parsed === "object" && parsed !== null && "findings" in parsed && Array.isArray(parsed.findings));
+      const entries: [string, number][] = [];
+      for (const item of parsed.findings) {
+        assert.ok(typeof item === "object" && item !== null && "file" in item && "priority" in item && "code" in item);
+        if (item.code === "TR501" && typeof item.file === "string" && typeof item.priority === "number") {
+          entries.push([item.file, item.priority]);
+        }
+      }
+      return Object.fromEntries(entries);
+    };
+
+    await write("tsconfig.json", `{ "compilerOptions": { "strict": true, "target": "ES2022", "module": "NodeNext", "types": [] }, "include": ["*.ts"] }`);
+    await write("server.ts", floating);
+    await write("client.ts", `"use client";\n${floating}`);
+    assert.deepEqual(await priorities(), { "server.ts": 0, "client.ts": 1 });
+
+    await write("tsconfig.json", `{ "compilerOptions": { "strict": true, "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "lib": ["ES2022", "DOM"], "types": [] }, "include": ["*.ts"] }`);
+    assert.deepEqual(await priorities(), { "server.ts": 1, "client.ts": 1 });
+
+    await write("tsconfig.json", `{ "compilerOptions": { "strict": true, "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "types": ["vite/client", "node"] }, "include": ["*.ts"] }`);
+    await mkdir(join(dir, "node_modules/vite"), { recursive: true });
+    await write("node_modules/vite/client.d.ts", "export {};\n");
+    await write("node_modules/vite/package.json", `{ "name": "vite", "types": "client.d.ts" }`);
+    assert.deepEqual(await priorities(), { "server.ts": 1, "client.ts": 1 });
+  });
 });

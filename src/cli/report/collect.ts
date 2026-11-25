@@ -66,6 +66,28 @@ interface TypeScriptResult {
   readonly findings: Finding[];
   readonly files: string[];
   readonly configs: string[];
+  readonly browserFiles: Set<string>;
+}
+
+function isBrowserConfig(parsed: ts.ParsedCommandLine): boolean {
+  const types = parsed.options.types ?? [];
+  const dom = (parsed.options.lib ?? []).some((lib) => lib.toLowerCase().includes("dom"));
+  const node = types.includes("node");
+  const plugins = parsed.options["plugins"];
+  const next =
+    Array.isArray(plugins) &&
+    plugins.some((plugin) => typeof plugin === "object" && "name" in plugin && plugin.name === "next");
+  return !next && ((dom && !node) || types.includes("vite/client"));
+}
+
+function isClientModule(source: ts.SourceFile): boolean {
+  const first = source.statements[0];
+  return (
+    first !== undefined &&
+    ts.isExpressionStatement(first) &&
+    ts.isStringLiteral(first.expression) &&
+    first.expression.text === "use client"
+  );
 }
 
 interface ParsedConfig {
@@ -143,8 +165,16 @@ function collectTypeScript(cwd: string, configPath: string, flags: ts.CompilerOp
   }
   const findings = new Map<string, Finding>();
   const files = new Set<string>();
+  const browserFiles = new Set<string>();
   for (const { path, parsed } of configs.value) {
     const program = ts.createProgram({ rootNames: parsed.fileNames, options: compilerOptions(parsed, flags), projectReferences: [] });
+    const browserConfig = isBrowserConfig(parsed);
+    for (const file of parsed.fileNames) {
+      const source = program.getSourceFile(file);
+      if (browserConfig || (source !== undefined && isClientModule(source))) {
+        browserFiles.add(relative(cwd, file));
+      }
+    }
     const diagnostics = [...parsed.errors, ...program.getOptionsDiagnostics(), ...ts.getPreEmitDiagnostics(program)];
     for (const diagnostic of diagnostics) {
       const found = diagnosticFinding(cwd, path, diagnostic);
@@ -158,7 +188,12 @@ function collectTypeScript(cwd: string, configPath: string, flags: ts.CompilerOp
       }
     }
   }
-  return ok({ findings: [...findings.values()], files: [...files], configs: configs.value.map((config) => config.path) });
+  return ok({
+    findings: [...findings.values()],
+    files: [...files],
+    configs: configs.value.map((config) => config.path),
+    browserFiles,
+  });
 }
 
 function cliConfig(configs: readonly string[]): Linter.Config[] {
@@ -283,6 +318,19 @@ async function dependencyCheck(cwd: string): AsyncResult<string[], string> {
   return ok([`${String(missing.length)} declared dependencies are not installed (${listed}). Findings that depend on their types may be wrong.`]);
 }
 
+const PROCESS_CRASHES = new Set(["TR501", "TR502"]);
+
+function inBrowser(finding: Finding, browserFiles: ReadonlySet<string>): Finding {
+  if (finding.code === undefined || !PROCESS_CRASHES.has(finding.code) || !browserFiles.has(finding.file)) {
+    return finding;
+  }
+  return {
+    ...finding,
+    priority: 1,
+    why: "This code runs in a browser, where a rejected promise that nothing handles is only logged: the failure is lost and the user sees nothing happen.",
+  };
+}
+
 export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, string> {
   const { cwd } = options;
   const dependencies = await dependencyCheck(cwd);
@@ -305,7 +353,9 @@ export async function buildReport(options: AnalyzeOptions): AsyncResult<Report, 
   return ok({
     generatedAt: new Date().toISOString(),
     project: cwd,
-    findings: [...typescript.value.findings, ...eslint.value].sort(compareFindings),
+    findings: [...typescript.value.findings, ...eslint.value]
+      .map((found) => inBrowser(found, typescript.value.browserFiles))
+      .sort(compareFindings),
     warnings: dependencies.value,
   });
 }
