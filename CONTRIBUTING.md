@@ -47,4 +47,9 @@ Keep changes focused. Code comments are reserved for logic that cannot be unders
 
 ## Releases
 
-typerail is published to npm as `@wingravity/typerail`. To release, set the version in `package.json`, commit, tag it `v<version>`, and run `npm publish`. `prepublishOnly` runs the type check, lint, tests and build first, so a failing check stops the release and `dist/` is always built from the tagged source.
+typerail is published to npm as `@wingravity/typerail` by the **Release** workflow, using npm trusted publishing: GitHub Actions proves its identity to npm, so no npm token is stored anywhere.
+
+1. Set the version in `package.json` and run `npm install --package-lock-only`.
+2. Commit, then tag the commit `v<version>` and push the tag: `git tag v0.2.0 && git push origin main v0.2.0`.
+
+The workflow checks that the tag matches `package.json`, then runs `npm publish`. `prepublishOnly` runs the type check, lint, tests and build first, so a failing check stops the release and `dist/` is always built from the tagged source. npm adds a provenance statement that links the published version to the workflow run and the commit.
